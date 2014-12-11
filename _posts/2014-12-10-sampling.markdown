@@ -1,0 +1,53 @@
+---
+layout: post
+title:  "Sampling"
+date:   2014-12-10 18:30:00
+categories: jekyll update
+tags: featured
+image: /assets/article_images/2014-08-29-welcome-to-jekyll/desktop.jpg
+---
+{% include algorithms_util.html %}
+Before I can explain the first algorithm, I first need to explain the problem it addresses.
+
+![Van Gogh's "Starry Night"](/assets/article_images/sampling/starry-night-detail.jpg)
+Light — electromagnetic radiation — the light emanating from this screen, traveling through the air, focused by your lens and projected onto the retina — is a continuous signal. To be perceived, we must reduce light to discrete impulses by measuring its intensity and frequency distribution at different points in space.
+
+This reduction process is called sampling, and it is essential to vision. You can think of it as a painter applying discrete strokes of color to form an image (particularly in Pointillism or Divisionism). Sampling is further a core concern of computer graphics; for example, to rasterize a 3D scene by raytracing, we must determine where to shoot rays. Even resizing an image requires sampling.
+
+Sampling is made difficult by competing goals. On the one hand, samples should be evenly distributed so there are no gaps. But we must also avoid repeating, regular patterns, which cause aliasing. This is why you shouldn’t wear a finely-striped shirt on camera: the stripes resonate with the grid of pixels in the camera’s sensor and cause Moiré patterns.
+
+![Retinal Cone Mosaic](/assets/article_images/sampling/retinal-cone-mosaic.jpg)
+The human retina has a beautiful solution to sampling in its placement of photoreceptor cells. The cells cover the retina densely and evenly (with the exception of the blind spot over the optic nerve), and yet the cells’ relative positions are irregular. This is called a Poisson-disc distribution because it maintains a minimum distance between cells, avoiding occlusion and thus wasted photoreceptors.
+
+Unfortunately, creating a Poisson-disc distribution is hard. (More on that in a bit.) So here’s a simple approximation known as Mitchell’s best-candidate algorithm.
+
+{% include d3-best-candidate-sampling.html %}
+You can see from these dots that best-candidate sampling produces a pleasing random distribution. It’s not without flaws: there are too many samples in some areas (oversampling), and not enough in other areas (undersampling). But it’s reasonably good, and just as important, easy to implement.
+
+Here’s how it works:
+
+{% include d3-best-candidate-explainer.html %}
+For each new sample, the best-candidate algorithm generates a fixed number of candidates, shown in gray. (Here, that number is 10.) Each candidate is chosen uniformly from the sampling area.
+
+The best candidate, shown in red, is the one that is farthest away from all previous samples, shown in black. The distance from each candidate to the closest sample is shown by the associated line and circle: notice that there are no other samples inside the gray or red circles. After all candidates are created and distances measured, the best candidate becomes the new sample, and the remaining candidates are discarded.
+
+Now here’s the code:
+
+{% highlight js %}
+function sample() {
+  var bestCandidate, bestDistance = 0;
+  for (var i = 0; i < numCandidates; ++i) {
+    var c = [Math.random() * width, Math.random() * height],
+        d = distance(findClosest(samples, c), c);
+    if (d > bestDistance) {
+      bestDistance = d;
+      bestCandidate = c;
+    }
+  }
+  return bestCandidate;
+}
+{% endhighlight %}
+
+As I explained the algorithm above, I will let the code stand on its own. (And the purpose of this essay is to let you study code through visualization, besides.) But I will clarify a few details:
+
+The external numCandidates defines the number of candidates to create per sample. This parameter lets you trade-off speed with quality. The lower the number of candidates, the faster it runs. Conversely, the higher the number of candidates, the better the sampling quality.

@@ -18,12 +18,12 @@ Examples for different formats and css features
 >Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus
 
 #Lists
-##orderd lists
+##ordered lists
 1. one
 2. two
 3. three
 
-##unorderd lists
+##unordered lists
 - Apple
 - Banana
 - Plum
