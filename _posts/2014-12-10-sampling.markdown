@@ -2,7 +2,6 @@
 layout: post
 title:  "Sampling"
 date:   2014-12-10 18:30:00
-categories: jekyll update
 tags: featured
 image: /assets/article_images/2014-08-29-welcome-to-jekyll/desktop.jpg
 ---
