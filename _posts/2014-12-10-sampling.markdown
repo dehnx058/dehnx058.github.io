@@ -7,6 +7,7 @@ tags: featured
 image: /assets/article_images/2014-08-29-welcome-to-jekyll/desktop.jpg
 ---
 {% include algorithms_util.html %}
+(The following is to test Jekyll, and is from http://bost.ocks.org/mike/algorithms/)
 Before I can explain the first algorithm, I first need to explain the problem it addresses.
 
 ![Van Gogh's "Starry Night"](/assets/article_images/sampling/starry-night-detail.jpg)
