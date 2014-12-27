@@ -36,8 +36,10 @@
       height = 500;
 
   var numClusters = 3,
-      numPoints = 50,
-      k = 3;
+      numPoints = 150,
+      k = 3,
+      searchDuration = 150,
+      searchNext = "end";
 
   var p = d3.select("#k-means-viz")
       .on("click", click);
@@ -83,16 +85,17 @@
       .text("▶ Play");
 
   beforeVisible(p.node(), click);
+
   var centers, s, p, points, centroids;
 
   var depthTracker = [{click:0, iteration:0, depth:0, locked: false}];
 
-    var cross = d3.svg.symbol().type('cross');
+  var cross = d3.svg.symbol().type('cross');
 
   function click() {
 
 
-    //svg.selectAll("g").interrupt().remove();
+    svg.selectAll(".search").interrupt().remove();
 
     gCurrent.selectAll("*")
         .interrupt()
@@ -115,10 +118,6 @@
         .remove();
 
     gClustered.selectAll("*")
-        .interrupt()
-        .remove();
-
-    gCandidate.selectAll("*")
         .interrupt()
         .remove();
 
@@ -152,14 +151,38 @@
 
     }
 
+    centroids = d3.range(k).map(function() { return [Math.random()*width, Math.random()*height]; });
+
     gNoCluster.selectAll("circle")
         .data(points)
       .enter().append("circle")
         .attr("class", "search")
+        .attr("opacity", 0)
         .attr("cx", function(d){ return d[0]; })
         .attr("cy", function(d){ return d[1]; })
-        .attr("r", 2.5);
+        .attr("r", 2.5)
+      .transition()
+        .delay(function(d,i){return Math.random() * 300  })
+        .duration(150)
+        .attr("opacity", 1);
 
+    gCentroids.selectAll("path")
+        .data(centroids)
+      .enter().append("path")
+        .attr("class", "centroid")
+        .attr("opacity", 0)
+        .attr("centroid", function(d,i){return "centroid" + i;})
+        .attr("d", cross)
+        .attr("fill", function(d,i){ return colorMap[i]; })
+        .attr("stroke-width",0)
+        .attr("cx", function(d){ return d[0]; })
+        .attr("cy", function(d){ return d[1]; })
+        .attr("transform", function(d){ return "translate(" + d[0] + "," + d[1] + ")scale(3)"; })
+      .transition()
+        .delay(500)
+        .duration(150)
+        .attr("transform", function(d){ return "translate(" + d[0] + "," + d[1] + ")scale(1)"; })
+        .attr("opacity",1);
 
     var curclick = depthTracker[depthTracker.length - 1].click + 1;
 
@@ -167,23 +190,14 @@
 
     depthTracker.push(curTracker);
 
-    centroids = d3.range(k).map(function() { return [Math.random()*width, Math.random()*height]; });
+    debugger;
 
-    gCentroids.selectAll("path")
-        .data(centroids)
-      .enter().append("path")
-        .attr("class", "centroid")
-        .attr("centroid", function(d,i){return "centroid" + i;})
-        .attr("d", cross)
-        .attr("fill", function(d,i){ return colorMap[i]; })
-        .attr("stroke-width",0)
-        .attr("cx", function(d){ return d[0]; })
-        .attr("cy", function(d){ return d[1]; })
-        .attr("transform", function(d){ return "translate(" + d[0] + "," + d[1] + ")"; });
-
-    
-    (function nextIteration(iterTracker) {
+    function nextIteration(iterTracker) {
       if( iterTracker.locked ) return;
+
+      gCandidate.selectAll("*")
+          .interrupt()
+          .remove();
 
       gCentroidMean.selectAll("circle")
           .data(centroids)
@@ -208,7 +222,7 @@
       iterTracker.iteration++;
       iterTracker.depth = 0;
 
-      (function nextPoint(nextTracker) {
+      function nextPoint(nextTracker) {
         
         nextTracker.depth++;
 
@@ -266,8 +280,8 @@
             .attr("cy", y);
 
         var t = g.transition()
-            .duration(150)
-            .each("end", function() {
+            .duration(searchDuration)
+            .each(searchNext, function() {
               // Stop recursion of old viz
               if(depthTracker[depthTracker.length-1] !== nextTracker) return;
 
@@ -283,6 +297,7 @@
                   .attr("r", 3.5);
 
               g.remove();
+              t.remove();
 
               var curCluster = gClustered.selectAll("[centroid=centroid"+cIndex+"]")[0];
 
@@ -373,11 +388,16 @@
             .attr("x2", closest[0])
             .attr("y2", closest[1]);
 
-      })(iterTracker);
+      };
+      nextPoint(iterTracker);
+    };
 
-      
-
-    })(curTracker);
+    debugger;
+    setTimeout(
+      nextIteration,
+      1200,
+      curTracker);
+    
 
 /*
 
