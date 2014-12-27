@@ -312,14 +312,15 @@
                               x2 = m.attributes.cx.value,
                               y2 = m.attributes.cy.value;
 
-                          if( c.attributes.cx.value != m.attributes.cx.value ||
-                              c.attributes.cy.value != m.attributes.cy.value ) {
+                          centroids[cur][0] = x2;
+                          centroids[cur][1] = y2;
+
+                          if( x1 != x2 ||
+                              y1 != y2 ) {
                             noneChanged = false;
                           } else {
                             continue;
                           }
-                          centroids[cur][0] = x2;
-                          centroids[cur][1] = y2;
 
                           gCentroidPath.append("line")
                             .attr("stroke", "#ccc")
