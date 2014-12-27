@@ -1,7 +1,7 @@
 ---
 layout: post
-title:  "Sampling"
-date:   2014-12-10 18:30:00
+title:  "k-means"
+date:   2014-12-26 18:30:00
 tags: featured
 image: /assets/article_images/2014-08-29-welcome-to-jekyll/desktop.jpg
 ---
