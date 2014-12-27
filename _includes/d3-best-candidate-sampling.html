@@ -3,51 +3,51 @@
 (function() {
 
 
-var margin = 3,
-    width = 700 - margin - margin,
-    height = 360 - margin - margin;
+  var margin = 3,
+      width = 700 - margin - margin,
+      height = 360 - margin - margin;
 
-var numSamplesPerFrame = 10,
-    numSamples = 2000,
-    numCandidates = 10,
-    timerActive = 0;
+  var numSamplesPerFrame = 10,
+      numSamples = 2000,
+      numCandidates = 10,
+      timerActive = 0;
 
-var p = d3.select("#best-candidate-sampling")
-    .on("click", click);
+  var p = d3.select("#best-candidate-sampling")
+      .on("click", click);
 
-var svg = p.append("svg")
-    .attr("width", width + margin + margin)
-    .attr("height", height + margin + margin)
-  .append("g")
-    .attr("transform", "translate(" + margin + "," + margin + ")");
+  var svg = p.append("svg")
+      .attr("width", width + margin + margin)
+      .attr("height", height + margin + margin)
+    .append("g")
+      .attr("transform", "translate(" + margin + "," + margin + ")");
 
-p.append("button")
-    .text("▶ Play");
+  p.append("button")
+      .text("▶ Play");
 
-whenFullyVisible(p.node(), click);
+  whenFullyVisible(p.node(), click);
 
-function click() {
-  var sample = bestCandidateSampler(width, height, numCandidates, numSamples),
-      timer = ++timerActive;
+  function click() {
+    var sample = bestCandidateSampler(width, height, numCandidates, numSamples),
+        timer = ++timerActive;
 
-  svg.selectAll("circle").remove();
-  p.classed("animation--playing", true);
+    svg.selectAll("circle").remove();
+    p.classed("animation--playing", true);
 
-  d3.timer(function() {
-    if (timerActive !== timer) return true;
-    for (var i = 0; i < numSamplesPerFrame; ++i) {
-      var s = sample();
-      if (!s) return p.classed("animation--playing", false), true;
+    d3.timer(function() {
+      if (timerActive !== timer) return true;
+      for (var i = 0; i < numSamplesPerFrame; ++i) {
+        var s = sample();
+        if (!s) return p.classed("animation--playing", false), true;
 
-      svg.append("circle")
-          .attr("cx", s[0])
-          .attr("cy", s[1])
-          .attr("r", 1e-6)
-        .transition()
-          .attr("r", 2);
-    }
-  });
-}
+        svg.append("circle")
+            .attr("cx", s[0])
+            .attr("cy", s[1])
+            .attr("r", 1e-6)
+          .transition()
+            .attr("r", 2);
+      }
+    });
+  }
 
 })()
 </script>

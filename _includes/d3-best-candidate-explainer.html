@@ -74,8 +74,7 @@ function click() {
       .attr("cx", quadtree.point[0])
       .attr("cy", quadtree.point[1]);
 
-  p
-      .classed("animation--playing", true);
+  p.classed("animation--playing", true);
 
   (function nextPoint() {
     var i = 0,
