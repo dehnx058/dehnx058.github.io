@@ -1,32 +1,32 @@
 {% raw %}
 <style>
 
-#best-candidate-explainer svg {
+#k-means-viz svg {
   border: solid 1px #ccc;
 }
 
-#best-candidate-explainer .candidate .point {
+#k-means-viz .candidate .point {
   fill: #ccc;
   transition: fill 250ms linear;
 }
 
-#best-candidate-explainer .candidate .search {
+#k-means-viz .candidate .search {
   fill: none;
   stroke: #ccc;
   transition: stroke 250ms linear, stroke-width 250ms linear;
 }
 
-#best-candidate-explainer .candidate--best .point {
+#k-means-viz .candidate--best .point {
   fill: #f00;
 }
 
-#best-candidate-explainer .candidate--best .search {
+#k-means-viz .candidate--best .search {
   stroke: #f00;
   stroke-width: 1.5px;
 }
 
 </style>
-<p class="animation" id="best-candidate-explainer">
+<p class="animation" id="k-means-viz">
 <script>
 (function() {
 
@@ -39,7 +39,7 @@
       numPoints = 50,
       k = 3;
 
-  var p = d3.select("#best-candidate-explainer")
+  var p = d3.select("#k-means-viz")
       .on("click", click);
 
   var svg = p.append("svg")
