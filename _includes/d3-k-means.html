@@ -190,8 +190,6 @@
 
     depthTracker.push(curTracker);
 
-    debugger;
-
     function nextIteration(iterTracker) {
       if( iterTracker.locked ) return;
 
@@ -392,121 +390,11 @@
       nextPoint(iterTracker);
     };
 
-    debugger;
     setTimeout(
       nextIteration,
       1200,
       curTracker);
     
-
-/*
-
-    gCandidate.selectAll("*")
-        .interrupt()
-        .remove();
-
-    gPoint.selectAll("*")
-        .interrupt()
-        .remove();
-
-    gPoint.append("circle")
-        .attr("r", 3.5)
-        .attr("cx", quadtree.point[0])
-        .attr("cy", quadtree.point[1]);
-
-    p.classed("animation--playing", true);
-
-    (function nextPoint() {
-      var i = 0,
-          maxDistance = -Infinity,
-          bestCandidate = null;
-
-      (function nextCandidate() {
-        if (++i > numCandidates) {
-          // End of search, add to tree
-          gCandidate.selectAll("*").transition()
-              .style("opacity", 0)
-              .remove();
-
-          gPoint.append("circle")
-              .attr("r", 3.5)
-              .attr("cx", bestCandidate.__data__[0])
-              .attr("cy", bestCandidate.__data__[1]);
-
-          quadtree.add(bestCandidate.__data__);
-
-          if (++numSamples < numSamplesMax) beforeVisible(p.node(), nextPoint);
-
-          else p.classed("animation--playing", false);
-
-          return;
-        }
-
-        var x = Math.random() * width,
-            y = Math.random() * height,
-
-            closest = quadtree.find([x, y]),
-
-            dx = closest[0] - x,
-            dy = closest[1] - y,
-
-            distance = Math.sqrt(dx * dx + dy * dy);
-
-        var g = gCandidate.insert("g", "*")
-            .datum([x, y])
-            .attr("class", "candidate--current");
-
-        g.append("circle")
-            .attr("class", "search")
-            .attr("r", 3.5)
-            .attr("cx", x)
-            .attr("cy", y);
-
-        g.append("line")
-            .attr("class", "search")
-            .attr("x1", x)
-            .attr("y1", y)
-            .attr("x2", x)
-            .attr("y2", y);
-
-        g.append("circle")
-            .attr("class", "point")
-            .attr("r", 3.5)
-            .attr("cx", x)
-            .attr("cy", y);
-
-        var t = g.transition()
-            .duration(1250)
-            .each("end", function() {
-              // Is this circle turned red?
-              if (distance > maxDistance) {
-                // Yes, remove previous best's class
-                d3.select(bestCandidate).attr( "class", null);
-
-                debugger;
-                d3.select(this.parentNode.appendChild(this)).attr("class", "candidate--best");
-                debugger;
-                // Set bestCandidate to this
-                bestCandidate = this;
-
-                maxDistance = distance;
-
-              } else {
-                d3.select(this).attr("class", null);
-              }
-              nextCandidate();
-            });
-
-        t.select("circle.search")
-            .attr("r", distance);
-
-        t.select("line.search")
-            .attr("x2", closest[0])
-            .attr("y2", closest[1]);
-      })();
-
-    })();
-*/
   }
 
 })()
