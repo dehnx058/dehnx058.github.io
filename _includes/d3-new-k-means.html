@@ -1,0 +1,537 @@
+{% raw %}
+<style>
+	#k-means-viz svg {
+	  border: solid 1px #ccc;
+	}
+
+	#k-means-viz .candidate .point {
+	  fill: #ccc;
+	  transition: fill 250ms linear;
+	}
+
+	#k-means-viz .search {
+	  fill: none;
+	  stroke: #ccc;
+	  transition: stroke 250ms linear, stroke-width 250ms linear;
+	}
+
+	#k-means-viz .candidate--best .point {
+	  fill: #f00;
+	}
+
+	#k-means-viz .candidate--best .search {
+	  stroke: #f00;
+	  stroke-width: 1.5px;
+	}
+</style>
+<div id="kMeans-input">
+	<p>
+	  <label for="numPoints" 
+	         style="display: inline-block; width: 240px; text-align: right">
+	         # of Points: <span id="numPoints-value">…</span>
+	  </label>
+	  <input type="range" min="1" max="150" id="numPoints" >
+	</p>
+	<p>
+	  <label for="numClusters" 
+	         style="display: inline-block; width: 240px; text-align: right">
+	         # of Clusters: <span id="numClusters-value">…</span>
+	  </label>
+	  <input type="range" min="1" max="10" id="numClusters" >
+	</p>
+	<p>
+	  <label for="numCentroids" 
+	         style="display: inline-block; width: 240px; text-align: right">
+	         # of Centroids: <span id="numCentroids-value">…</span>
+	  </label>
+	  <input type="range" min="1" max="10" id="numCentroids" >
+	</p>
+</div>
+<p class="animation" id="k-means-viz">
+<script>
+(function() {
+	var colorMap = ['rgb(228,26,28)','rgb(55,126,184)','rgb(77,175,74)','rgb(152,78,163)','rgb(255,127,0)','rgb(255,255,51)'];
+	var n = 1;
+	var width = 700,
+		height = 500;
+
+	var searchDuration = 150,
+		searchNext = "end";
+
+	var kData = {
+		numClusters : 3,
+		numPoints : 50,
+		numCentroids : 3,
+		data : {
+			points : [],
+			clusters : [],
+			centroids : []
+		},
+		quad: null,
+		iteration: 0
+	};
+
+	var buttons = [
+		{ 
+			text: "▶ Play",
+			onclick: kMeans_run,
+			id: "button_play"
+		},
+		{ 
+			text: "→ Next",
+			onclick: null,
+			id: "button_next"
+		},
+		{
+			text:"New Points",
+			onclick: function(){ kMeans_data("points"); },
+			id: "button_points"
+		},
+		{
+			text:"New Clusters",
+			onclick: function(){ kMeans_data("clusters"); },
+			id: "button_clusters"
+		},
+		{
+			text:"New Centroids",
+			onclick: function(){ kMeans_data("centroids"); },
+			id: "button_centroids"
+		}
+	];
+
+	var p = d3.select("#k-means-viz");
+
+	p.selectAll("button")
+		.data(buttons)
+		.enter()
+			.append("button")
+				.text( F("text") )
+				.attr("id", F("id"))
+				.on("click", F("onclick"));
+
+	var next_button = p.select("#button_next");
+	next_button.attr("disabled", "true");
+
+	var svg = p.append("svg")
+		.attr("width", width)
+		.attr("height", height);
+
+	var gPoints = svg.append("g")
+		.attr("class", "k_point_g");
+
+	var gCentroids = svg.append("g")
+		.attr("class", "k_centroid_g");
+
+	//var gCentroidPaths = svg.append("g")
+	//	.attr("class", "k_centroid_path_g");
+
+	var gVoronoi = svg.append("g")
+		.attr("class", "k_voronoi_g");
+
+	// update the elements
+	function kMeans_param_update(param,val,t) {
+
+		// adjust the text on the slider
+		d3.select("#"+param+"-value").text(val);
+		d3.select("#"+param+"").property("value", val);
+		kData[param] = val;
+
+		if(param == "numPoints") {
+			kData.data.points = kData.data.raw_points.slice(0,kData.numPoints);
+			kMeans_setup_points(false);
+		}
+		
+	}
+
+	// when the input range changes update the circle 
+	d3.selectAll("#kMeans-input input").on("input", function() {
+		kMeans_param_update(this.id, this.valueAsNumber);
+	});
+
+
+	kMeans_data("clusters");
+	kMeans_data("centroids");
+
+	// Initial starting parameters onsliders
+	kMeans_param_update("numPoints",kData.numPoints);
+	kMeans_param_update("numClusters",kData.numClusters);
+	kMeans_param_update("numCentroids",kData.numCentroids);
+
+	//beforeVisible(p.node(), inView);
+
+	function kMeans_data(type){
+		//kMeans_setup_all();
+		gPoints.selectAll(".k_point_done")
+			.interrupt().remove();
+
+	    gVoronoi.selectAll("*")
+	        .interrupt()
+	        .remove();
+
+		switch(type) {
+			case "clusters":
+				rClusters();
+			case "points":
+				rPoints();
+				kMeans_setup_points(true);
+				break;
+			case "centroids":
+				rCentroids();
+				kMeans_setup_centroids();
+				break;
+			default:
+				break;
+		}
+
+		function rClusters() {
+			kData.data.clusters = [];
+
+		    s = bestCandidateSampler(width-50, height-30, 3, kData.numClusters);
+
+		    while( p = s() ) {
+		      kData.data.clusters.push( [ p[0]+25, p[1]+15 ] );
+		    }
+		}
+		function rPoints() {
+			kData.data.raw_points = [];
+
+			//if (kData.data.clusters.length == 0) rClusters();
+			//debugger;
+			var randomX = [],
+				randomY = [];
+
+			for(var i = 0; i < kData.numClusters; i++) {
+	      		randomX.push( d3.random.normal(kData.data.clusters[i][0], 40) );
+	        	randomY.push( d3.random.normal(kData.data.clusters[i][1], 40) );
+	        }
+
+		    for (var i = 0; i < 150; i++) {
+		    	var x = randomX[i%kData.numClusters](),
+		    		y = randomY[i%kData.numClusters]();
+
+		    	if( x >= 0 && x <= width &&
+		          	y >= 0 && y <= height) {
+		    		kData.data.raw_points.push([x,y]);
+		    	} else { 
+		    		i--; 
+		    	}
+		    }
+
+	      	kData.data.points = kData.data.raw_points.slice(0,kData.numPoints);
+		}
+		function rCentroids() {
+			kData.data.centroids = [];
+			kData.data.centroids[0] = d3.range(kData.numCentroids).map(function(c,i,a) { 
+				return [Math.random()*width, Math.random()*height, i]; 
+			});
+
+			kData.quad = d3.geom.quadtree()
+			    .extent([[-1, -1], [width + 1, height + 1]])
+			    (kData.data.centroids[0]);
+		}
+
+	}
+
+	function kMeans_setup_all() {
+		kMeans_setup_points(true);
+		kMeans_setup_centroids();
+	}
+
+	function kMeans_setup_points(tActive) {
+		//tActive = typeof tActive === "undefined" ? false: true;
+
+		kMeans_viz_reset_points();
+		// Add Points
+		gPoints.selectAll("circle")
+	        .data(kData.data.points.slice(0,kData.numPoints))
+	      .enter()
+	      	.append("circle")
+	        .attr("class", "k_point")
+	        .attr("opacity", 0)
+	        //.call(function(d,i){debugger;})
+	        .attr("cx", F("0"))
+	        .attr("cy", F("1"))
+	        .attr("r", 2.5)
+	        .call(function(p,tActive){
+	        	if(tActive) {
+			      	return p.transition()
+			        	.delay(function(d,i){return Math.random() * 300 })
+			        	.duration(150)
+			        	.attr("opacity", 1);
+	        	} else {
+			    	return p.attr("opacity", 1);
+	        	}
+	        },tActive);
+	}
+
+	function kMeans_setup_centroids() {
+		kMeans_viz_reset_centroids();
+		// Add Centroids
+		gCentroids.selectAll("path")
+			.data(kData.data.centroids.slice(-1)[0])
+		  .enter().append("path")
+			.attr("class", "k_centroid")
+			.attr("opacity", 0)
+			//.attr("centroid", function(d,i){ return "centroid" + i; })
+			.attr("d", d3.svg.symbol().type('cross'))
+			.attr("fill", function(d,i){ return colorMap[i]; })
+			.attr("stroke-width",0)
+			.attr("cx", F("0"))
+			.attr("cy", F("1"))
+			.attr("transform", function(d){ return "translate(" + d[0] + "," + d[1] + ")scale(3)"; })
+		  .transition()
+			.delay(200)
+			.duration(150)
+			.attr("transform", function(d){ return "translate(" + d[0] + "," + d[1] + ")scale(1)"; })
+			.attr("opacity",1)
+			;
+
+		kMeans_setup_means();
+	}
+
+	function kMeans_setup_means() {
+
+		gCentroids.selectAll(".k_centroid_mean")
+			.interrupt().remove();
+
+		gCentroids.selectAll("circle.k_centroid_mean")
+			.data(kData.data.centroids.slice(-1)[0]) // Gets the latest centroids
+		  .enter().append("circle")
+			.attr("class", "k_centroid_mean")
+			.attr("centroid", function(d,i){return "centroid" + i;})
+			.attr("fill-opacity", 0)
+			.attr("opacity",0) // Hide until it makes sense
+			.attr("stroke", function(d,i){ return colorMap[i]; })
+			.attr("stroke-width",1)
+			.attr("r", 5.5)
+			.attr("cx", function(d){ return d[0]; })
+			.attr("cy", function(d){ return d[1]; });
+	}
+
+	function kMeans_run() {
+
+	    gVoronoi.selectAll("*")
+	        .interrupt()
+	        .remove();
+		// Each step as a function
+
+		gPoints.selectAll(".k_point_done")
+			.interrupt().remove();
+
+		kData.iteration = 0;
+		
+		findClosest();
+
+		function findClosest(){
+			// Find closest centroid for each point
+			kData.iteration++;
+
+			kMeans_setup_means();
+
+			kData.quad = d3.geom.quadtree()
+			    .extent([[-1, -1], [width + 1, height + 1]])
+			    (kData.data.centroids.slice(-1)[0]);
+
+			var delayVal = 100;
+			var curPoint = null;
+
+			gPoints.selectAll(".k_point_done")
+				.interrupt().remove();
+
+			gPoints.selectAll("circle.k_point_done")
+				.data(kData.data.points)
+			  .enter().append("circle")
+			  	.attr("class", "k_point_done")
+			  	.attr("cx", F("0"))
+			  	.attr("cy", F("1"))
+	        	.attr("r", 2.5)
+	        	.attr("opacity", 0)
+	          .transition()
+	          	.delay(function(d,i){ return i*delayVal+delayVal; })
+	          	.attr("opacity", 1)
+	          	.each("end", function(d,i){
+	          		var cIndex = kData.quad.find(d)[2];
+					d["centroid"] = cIndex;
+
+					// Change the point's color
+					d3.select(this)
+                		.attr("centroid", "centroid"+cIndex)
+						.transition()
+							.delay(500)
+							.attr("fill",function(d,i){
+								return colorMap[cIndex];
+							});
+
+	          		var x = d[0],
+	          		    y = d[1],
+	          		    cent = kData.data.centroids.slice(-1)[0][cIndex],
+	          		    dist = distance(d, cent);
+
+	          		var g = gPoints.insert("g", "*")
+			            .datum([x, y])
+			            .attr("class", "candidate--current");
+
+			        g.append("circle")
+			            .attr("class", "search")
+			            .attr("r", 3.5)
+			            .attr("cx", x)
+			            .attr("cy", y);
+
+			        g.append("line")
+			            .attr("class", "search")
+			            .attr("x1", x)
+			            .attr("y1", y)
+			            .attr("x2", x)
+			            .attr("y2", y);
+
+			        g.append("circle")
+			            .attr("class", "point")
+			            .attr("r", 3.5)
+			            .attr("cx", x)
+			            .attr("cy", y);
+
+			        var t = g.transition()
+			        	//.delay(i*delayVal)
+			        	.duration(500)
+			        	.ease("exp-out")
+			        	.each("end", function(d,i){
+			        		var curCluster = gPoints.selectAll("[centroid=centroid"+cIndex+"].k_point_done")[0];
+			        		
+			            	gCentroids.select("[centroid=centroid"+cIndex+"].k_centroid_mean")
+				                    .attr("opacity",1)
+				                  .transition()
+				                    .attr("cx", d3.mean(curCluster, function(d){ return d.attributes.cx.value; }))
+				                    .attr("cy", d3.mean(curCluster, function(d){ return d.attributes.cy.value; }));
+
+			        		if(n++ == kData.numPoints){
+			        			n = 1;
+			        			next_button
+			        				.attr("disabled", null)
+			        				.on("click",moveCentroids);
+			        		};
+			        	})
+			        	.remove();
+
+			        t.select("circle.search")
+			            .attr("r", dist);
+
+			        t.select("line.search")
+			            .attr("x2", cent[0])
+			            .attr("y2", cent[1]);
+	          	});
+
+				
+
+		}
+
+		function moveCentroids(){
+			// Move centroid to mean if too far, otherwise exit
+			console.log("Moving Centroids...");
+			next_button
+				.attr("disabled", "disabled")
+				.on("click",null);
+
+			var newCentroids = [];
+			// Add new centroid positions
+			gCentroids.selectAll(".k_centroid_mean")
+				.each(function(c,i){
+					debugger;
+					newCentroids.push([
+							d3.select(this).attr("cx"),
+							d3.select(this).attr("cy"),
+							i
+						]);
+				});
+			var count = 0;
+			var noneMoved = true;
+			//debugger;
+			kData.data.centroids.push(newCentroids);
+
+			gCentroids.selectAll(".k_centroid")
+				.data(newCentroids)
+			  .transition()
+				.duration(1000)
+				.attr("cx", function(d,i){ return d[0]; })
+				.attr("cy", function(d,i){ return d[1]; })
+				.attr("transform", function(d,i){ return "translate(" + d[0] + "," + d[1] + ")"; })
+				.each("end", function(d,i){
+					if( distance(kData.data.centroids.slice(-2)[0][i], d) > 1) noneMoved = false;
+					if(++count == kData.numCentroids){
+						if(noneMoved) {
+							showVoronoi();
+						} else {
+							findClosest();
+						}
+					}
+				});
+
+			gCentroids.selectAll(".k_centroid_mean")
+				.transition()
+					.duration(1000)
+					.attr("opacity",0)
+					.remove();
+
+		}
+
+
+	}
+
+	function showVoronoi(argument) {
+		var voronoi = d3.geom.voronoi()
+		  	.clipExtent([[0, 0], [width, height]]);
+
+		gVoronoi.selectAll("path")
+		 	.data(voronoi(kData.data.centroids.slice(-1)[0]))
+		  .enter()
+			.append("path")
+			.style("fill", function(d, i) { return colorMap[i]; })
+			.attr("d", function(d) { return "M" + d.join("L") + "Z"; })
+			.attr("fill-opacity", 0)
+		  .transition()
+			.duration(1000)
+			.attr("fill-opacity", 0.1);
+	}
+
+	function kMeans_viz_reset_points() {
+		gPoints.selectAll("circle")
+			.interrupt().remove();
+	}
+	function kMeans_viz_reset_centroids() {
+		gCentroids.selectAll(".k_centroid")
+			.interrupt().remove();
+		gCentroids.selectAll(".k_centroid_mean")
+			.interrupt().remove();
+		gCentroids.selectAll(".k_centroid_path")
+			.interrupt().remove();
+	}
+	function kMeans_viz_reset_voronoi() {
+		gVoronoi.selectAll("k_voronoi")
+			.interrupt().remove();
+	}
+	function kMeans_viz_reset_all() {
+		kMeans_viz_reset_points();
+		kMeans_viz_reset_centroids();
+		kMeans_viz_reset_voronoi();
+	}
+
+
+	function endall(transition, callback) { 
+	    var n = 0; 
+	    transition 
+	        .each(function() { ++n; }) 
+	        .each("end", function() { if (!--n) callback.apply(this, arguments); }); 
+	} 
+
+//And then, rather than each("end", callback), say call(endall, callback): 
+/*
+  d3.selectAll("g")
+  	.transition()
+  		.call(endall, function() { 
+			console.log("all done"); 
+		}); 
+*/
+
+})()
+</script>
+</p>
+{% endraw %}

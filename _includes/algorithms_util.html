@@ -1,5 +1,22 @@
 <script>
 
+function F(name) {
+    var args, prop;
+    args = Array.prototype.slice.call(arguments, 1);
+    return function (obj, arr) {
+        prop = obj && name ? obj[name] : obj;
+        arr = arr && arr.length ? arr : args;
+        return (typeof prop === 'function' ? prop.apply(obj, arr) : prop);
+    };
+}
+
+function distance(a, b) {
+
+  var dx = a[0] - b[0],
+      dy = a[1] - b[1];
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
 function uniformRandomSampler(width, height, numSamplesMax) {
   var numSamples = 0;
   return function() {
