@@ -23,6 +23,18 @@
 	  stroke: #f00;
 	  stroke-width: 1.5px;
 	}
+	div#k-means-steps {
+	    background: #DEDEFC;
+	    height: 150px;
+	    width: 200px;
+	    position: absolute;
+	    right: -211px;
+	    top: 33px;
+	}
+
+	p#k-means-viz {
+	    position: relative;
+	}
 </style>
 <div id="kMeans-input">
 	<p>
@@ -47,6 +59,7 @@
 	  <input type="range" min="1" max="10" id="numCentroids" >
 	</p>
 </div>
+<div id="k-means-buttons"></div>
 <p class="animation" id="k-means-viz">
 <script>
 (function() {
@@ -100,8 +113,9 @@
 	];
 
 	var p = d3.select("#k-means-viz");
+	var buttons_div = d3.select("#k-means-buttons");
 
-	p.selectAll("button")
+	buttons_div.selectAll("button")
 		.data(buttons)
 		.enter()
 			.append("button")
@@ -109,7 +123,7 @@
 				.attr("id", F("id"))
 				.on("click", F("onclick"));
 
-	var next_button = p.select("#button_next");
+	var next_button = buttons_div.select("#button_next");
 	next_button.attr("disabled", "true");
 
 	var svg = p.append("svg")
@@ -161,8 +175,7 @@
 
 	function kMeans_data(type){
 		//kMeans_setup_all();
-		gPoints.selectAll(".k_point_done")
-			.interrupt().remove();
+		kMeans_stop_current();
 
 	    gVoronoi.selectAll("*")
 	        .interrupt()
@@ -308,15 +321,26 @@
 			.attr("cy", function(d){ return d[1]; });
 	}
 
+	function kMeans_stop_current(){
+		gPoints.selectAll(".k_point_done")
+			.interrupt().remove().transition();
+
+		gPoints.selectAll(".candidate--current")
+			.interrupt().remove().transition();
+	}
+
 	function kMeans_run() {
+
+		if(kData.data.centroids.length > 1){
+			kData.data.centroids = [kData.data.centroids[0]]; 
+			kMeans_setup_centroids();
+		}
 
 	    gVoronoi.selectAll("*")
 	        .interrupt()
 	        .remove();
-		// Each step as a function
 
-		gPoints.selectAll(".k_point_done")
-			.interrupt().remove();
+		kMeans_stop_current();
 
 		kData.iteration = 0;
 		
@@ -336,7 +360,7 @@
 			var curPoint = null;
 
 			gPoints.selectAll(".k_point_done")
-				.interrupt().remove();
+				.interrupt().remove().transition();
 
 			gPoints.selectAll("circle.k_point_done")
 				.data(kData.data.points)
@@ -410,12 +434,21 @@
 			        				.on("click",moveCentroids);
 			        		};
 			        	})
+			        	.each("interrupt", function(d,i){
+			        		d3.select(this).selectAll("*").interrupt().remove();
+			        	})
 			        	.remove();
 
 			        t.select("circle.search")
+			        	//.each("interrupt",function(d,i){
+			        	//	d3.select(this).remove();
+			        	//})
 			            .attr("r", dist);
 
 			        t.select("line.search")
+			        	//.each("interrupt",function(d,i){
+			        	//	d3.select(this).remove();
+			        	//})
 			            .attr("x2", cent[0])
 			            .attr("y2", cent[1]);
 	          	});

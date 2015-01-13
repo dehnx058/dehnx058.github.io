@@ -1,0 +1,562 @@
+<style>
+  #knn-viz {
+    position: relative;
+  }
+  #knn-viz svg {
+    border: solid 1px #ccc;
+  }
+  .article-image {
+    display: none;
+  }
+  circle.data {
+    stroke-width: 2px;
+  }
+  .g_static line.axis, 
+  .lineup_bars line {
+    fill: none;
+    stroke: #000;
+    shape-rendering: crispEdges;
+  }
+  .g_static .k_line {
+    stroke: #222;
+    stroke-width: 1.5px;
+  }
+</style>
+<p class="animation" id="knn-viz">
+<script>
+function distance(a, b) {
+  var dx = a[0] - b[0],
+      dy = a[1] - b[1];
+  return Math.sqrt(dx * dx + dy * dy);
+}
+function angle(point, origin) {
+  var x = point[0] - origin[0],
+      y = point[1] - origin[1];
+  return Math.atan2( y, x );
+}
+function toDegrees(rad){
+  var deg = ( 360 * rad ) / ( 2 * Math.PI );
+  return deg;
+}
+function toRadians(deg) {
+  var rad = ( 2 * Math.PI ) * ( deg / 360 );
+  return rad;
+}
+function pathAlongCircle(point,origin,angleEndDeg,direction) {
+  point = point.length ? point : [point.x,point.y];
+  origin = origin.length ? origin : [origin.x,origin.y];
+
+  angleEndDeg = angleEndDeg || 0;
+  direction = direction || 1;
+  var f = 2;
+  var flip = 1;
+  var oPoint = point.slice();
+  
+  if( point[1] > origin[1] ) {
+    flip = -1;
+    point[1] = origin[1] - (point[1] - origin[1] );
+  }
+  
+  var radius = distance(point,origin);
+  var angleStartRad = angle(point,origin);
+  var angleStartDeg = toDegrees(angleStartRad);
+  var angleEndRad = toRadians(angleEndDeg);
+  
+  var points = d3
+    .range(Math.floor(angleStartDeg),Math.ceil(angleEndDeg))
+    .map(function(d,i,a){
+      var x = origin[0] + radius * Math.cos( toRadians(d) );
+      var y = origin[1] + flip * (radius * Math.sin( toRadians(d) ));
+      return [x,y];
+    });
+  
+  // Fix start and end points
+  points = [oPoint].concat(points).concat([[origin[0] + radius, origin[1]]]);
+  
+  var lineFunction = d3.svg.line()
+    .tension(0)
+    .interpolate("basis");
+  
+  var path = lineFunction(points);
+
+  return path;
+}
+function translateAlongPath(path, direction) {
+    var l = path.getTotalLength();
+    return function() {
+        return function(t) {
+            if (direction < 0) t = 1 - t;
+            var p = path.getPointAtLength(t * l);
+            d3.select(this)
+                .attr('cx', p.x)
+                .attr('cy', p.y);
+        };
+    };
+}
+
+
+var knn_div = d3.select("#knn-viz");
+var width  = parseInt(knn_div.style("width").slice(0,-2));
+var height = 1000;
+
+var svg = knn_div.append("svg")
+    .attr("width", width)
+    .attr("height", height)
+    //.attr("transform",  "scale(" + ( width/500 ) + ")")
+    ;
+
+//svg.on("click",fadeout_and_restart);
+
+function fadeout_and_restart(dur){
+  dur = dur || 500;
+
+  svg.selectAll("*").interrupt()
+      .transition()
+      .duration(dur)
+      .style("opacity", 0)
+      .remove();
+
+  setTimeout(kNN_setup,dur);
+}
+
+function kNN_setup(){ 
+
+  var sample_diameter = width > 400 ? Math.max(400, 0.3 * width) : width;
+
+  var og = [width/2,sample_diameter/2];
+
+  var circRad = (width/500 * 5).clamp(3,7);
+
+  var typeColor = ["red","blue","green","orange"],
+      origin = [0,0],
+      points = d3.range(0,15)
+        .map(function(d,i,a){
+          // Random position distributed evenly by distance
+          var inner_rad = circRad + 10;//0.05 * sample_diameter;
+          var outer_rad = sample_diameter / 2;
+
+          var radius = i / a.length * outer_rad
+                     + inner_rad // Space away from the center
+                     + (Math.random()-0.5) * 8; // Add some jitter
+          radius = radius.clamp(0,outer_rad-circRad);
+
+          var deg = Math.random() * 360;
+          
+          var x = radius * Math.cos( toRadians(deg) );
+          var y = radius * Math.sin( toRadians(deg) );
+          
+          return  {
+                    x: x,
+                    y: y,
+                    type: Math.floor(( ((deg+30)%360) / 360)*3),
+                    radius: radius,
+                    deg: deg,
+                    i: i + 1
+                  };
+        });
+
+
+  var tf = {
+    //scale: "scale(" + ( width/500 ) + ")",
+    scale: "",
+    translate: "translate(" + og[0] + ","+ og[1] +")"
+  }
+  var gLineup = svg.append("g")
+    //.attr("scale", width/500 )
+    .attr("class","g_lineup")
+    .attr("opacity",0.4)
+    .attr("transform", tf.scale + tf.translate);
+
+  gLineup.append("circle")
+    .attr("class","origin lineup")
+    .attr("r",circRad)
+    .attr("cx", origin[0])
+    .attr("cy", origin[1]);
+
+  gLineup.selectAll("circle.data")
+      .data(points)
+    .enter().append("circle")
+      .attr({
+        "class" : function(d,i){ return "data lineup data" + i; },
+        "cx"    : function(d){return d.x},
+        "cy"    : function(d){return d.y},
+        "r"     : circRad,
+        "fill"  : function(d){return typeColor[d.type]}
+      })
+      .style("stroke","#fff")
+      .on("mouseover", circle_mouseover)                  
+      .on("mouseout", circle_mouseout)
+      .on("click", new_k)
+      .each(function(d,i){
+        var path = pathAlongCircle(d,origin);
+        //var path2 = svg.append("path").attr("d",path);
+        var el = d3.select(dummySVGElement("path")).attr("d",path);
+        d3.select(this)
+          .transition()
+            .duration(2500)
+            .tween('translateAlongPath', translateAlongPath(el.node(), 1));
+
+      });
+
+  var gStatic = svg.append("g")
+    .attr("class","g_static")
+    .attr("transform", tf.scale + tf.translate);
+
+  console.log(sample_diameter / 2);
+
+  var half_sd = sample_diameter / 2 + 5;
+
+  gStatic.append("line")
+    .attr({
+      "class": "x axis",
+      "x1": -half_sd - 10,
+      "y1": half_sd,
+      "x2": half_sd,
+      "y2": half_sd,
+    });  
+  gStatic.append("line")
+    .attr({
+      "class": "y axis",
+      "x1": -half_sd,
+      "y1": half_sd + 10,
+      "x2": -half_sd,
+      "y2": -half_sd + 10
+    });
+
+  gStatic.append("circle")
+    .attr("class","origin static")
+    .attr("r", circRad)
+    .attr("cx", origin[0])
+    .attr("cy", origin[1]);
+
+  gStatic.selectAll("circle.data")
+      .data(points)
+    .enter().append("circle")
+      .attr({
+        "class" : function(d,i){ return "data static data" + i; },
+        "cx"    : function(d){return d.x},
+        "cy"    : function(d){return d.y},
+        "r"     : circRad,
+        "fill"  : function(d){return typeColor[d.type]}
+      })
+      .style("stroke","#fff")
+      .on("mouseover", circle_mouseover)                  
+      .on("mouseout", circle_mouseout)
+      .on("click", new_k);
+
+  gLineup.transition()
+    .delay(2500)
+    .duration(1000)
+    .attr("transform","translate(" + 25 + "," + ( sample_diameter + 75 ) + ")")
+    .attr("opacity",1)
+    .each("end",function(d,i){
+      var t = d3.select(this)
+        .transition()
+          .duration(500)
+          .each("end",add_scales);
+      
+      t.selectAll(".data.lineup")
+        .attr("cx",function(d){ return  offset_calc(d); })
+    });
+
+  var current_k = 4;
+  
+  var gLineupBars = gLineup.append("g").attr("class","lineup_bars");
+  var a_height = 10;
+  var a_top = 10;
+
+  var a_points = [
+    [0,a_top],
+    [0,a_top + a_height],
+    [function(){ return offset_calc(points[current_k-1]); },
+      a_top + a_height],
+    [function(){ return offset_calc(points[current_k-1]); },
+      a_top]
+  ];
+
+  var lineup_axis = [
+    { "class": "left",
+      "x1":  a_points[0][0], "y1":  a_points[0][1],
+      "x2":  a_points[1][0], "y2":  a_points[1][1] },
+    { "class": "bottom",
+      "x1":  a_points[1][0], "y1":  a_points[1][1],
+      "x2":  a_points[2][0], "y2":  a_points[2][1] },
+    { "class": "right",
+      "x1":  a_points[2][0], "y1":  a_points[2][1],
+      "x2":  a_points[3][0], "y2":  a_points[3][1] }
+  ];
+
+  var colorCount = d3.range(0,typeColor.length)
+  .map(function(d,i,a){
+    return {
+      count: 0,
+      name: typeColor[i],
+      first: d3.min(points.filter(function(d2,i2){ return d2.type == i; }),
+                    function(d4){ return d4.i; })
+    };
+  });
+
+  var partition = d3.layout.partition()
+    .value(function(d) { return d.count; })
+    .sort(keySort("first"));
+
+  function add_scales(){
+    //debugger;
+    gLineup.selectAll("text")
+        .data( [0, points[current_k-1]] )
+      .enter().append("text")
+        .attr({
+          "class": function(d,i) { return i? "k_label": "k_eq_label"; },
+          "x":  function(d,i) { return i? offset_calc(d): 0; },
+          "y":  -( circRad + 6 ),
+          "opacity": 0,
+          "text-anchor": "middle",
+          "font-size": circRad * 2.5 + "px"
+        })
+        .text( function (d) { return d.i ? d.i: "k ="; })
+        .transition()
+          .duration(500)
+          .attr("opacity",1);
+
+    gLineupBars.selectAll("line")
+      .data(lineup_axis)
+    .enter().append("line")
+      .attr({
+        "class": function(d,i){ return d.class; },
+        "x1": function(d,i){ return typeof d.x1 == "function" ? d.x1(): d.x1; },
+        "y1": function(d,i){ return typeof d.y1 == "function" ? d.y1(): d.y1; },
+        "x2": function(d,i){ return typeof d.x2 == "function" ? d.x2(): d.x2; },
+        "y2": function(d,i){ return typeof d.y2 == "function" ? d.y2(): d.y2; }
+      })
+      .attr("opacity",0)
+      .transition()
+      .attr("opacity",1);
+
+    var barWidth = offset_calc(points[current_k-1]);
+
+    colorCount.map(function(d){ d.count = 0; });
+
+    points.slice(0,current_k).map(function(d,i,a){
+      colorCount[d.type].count++;
+    });
+
+    var most = colorCount.reduce(
+      function(p, v) { 
+        if( v.count == p.count )
+          return v.first < p.first ? v : p;
+        else
+          return v.count > p.count ? v : p;
+      }, {count:0,first:points.length});
+
+    console.log(most.name);
+
+    var colorData = {
+      "name": "root",
+      "count": current_k,
+      "children": colorCount.slice()
+    };
+
+    var bar_x = d3.scale.linear()
+      .range([0, barWidth]);
+
+    var barData = partition(colorData).slice(1);
+
+    gStatic.selectAll("line.k_line")
+        .data(points)
+      .enter().append("line")
+        .attr({
+          "class":"k_line",
+          "x1": 0, "y1": 0,
+          "x2": function(d){ return d.x},
+          "y2": function(d){ return d.y},
+          "opacity": 0
+        })
+        .moveToBack()
+        .transition()
+          .attr("opacity",function(d,i){ return d.i <= current_k ? 1: 0; });
+
+    gLineupBars.selectAll("rect")
+      .data(barData)
+    .enter().append("rect")
+      .attr("x", function(d) { return bar_x(d.x)+1; })
+      .attr("y", a_top + a_height + 2 )
+      .attr("width", function(d) { return Math.max(bar_x(d.dx)-2,0); })
+      .attr("height", 15)
+      .attr("fill", function(d) { return d.name; })
+      .attr("stroke", function(d,i){ return d.name == most.name? "#000":"#fff"; })
+      .attr("stroke-width", 2)
+      .attr("opacity",0)
+      .transition()
+      .attr("opacity",1);
+
+    gLineupBars.selectAll("text.bar_label")
+      .data(barData)
+    .enter().append("text")
+      .attr({
+        "class": function(d,i){ return "bar_label bar" + i; },
+        "x": function(d) { return bar_x(d.x)+1 + Math.max(bar_x(d.dx)-2,0)/2; },
+        "y": a_top + a_height + 30,
+        "opacity": function(d,i){ return d.count > 0 ? 1: 0},
+        "text-anchor": "middle",
+        "font-size": circRad * 2.5 + "px"
+      })
+      .text(function(d){ return d.count; });
+
+    gLineup.append("text")
+      .attr({
+        "x": og[0] - 25,
+        "y": 75,
+        "opacity": 0,
+        "text-anchor": "middle",
+        "font-size": circRad * 2.5 + "px"
+      })
+      .text("Click on a point to change k")
+      .transition()
+        .attr("opacity",1)
+  }
+
+  function new_k(d,i){
+    current_k = i + 1;
+
+    gLineup.select("text.k_label")
+      .transition()
+      .duration(250)
+      .attr("opacity",0)
+      .each("end", function(d,i){
+        d3.select(this)
+            .attr("x", offset_calc(points[current_k-1]) )
+            .text(current_k)
+            .transition()
+              .duration(250)
+              .attr("opacity",1);
+      });
+
+    var barWidth = offset_calc(points[current_k-1]);
+
+    colorCount.map(function(d){ d.count = 0; });
+
+    points.slice(0,current_k).map(function(d,i,a){
+      colorCount[d.type].count++;
+    });
+
+    var most = colorCount.reduce(
+      function(p, v) { 
+        if( v.count == p.count )
+          return v.first < p.first ? v : p;
+        else
+          return v.count > p.count ? v : p;
+      }, {count:0,first:points.length});
+
+    console.log(most.name);
+
+    var colorData = {
+      "name": "root",
+      "count": current_k,
+      "children": colorCount.slice()
+    };
+
+    var bar_x = d3.scale.linear()
+      .range([0, barWidth]);
+
+    var barData = partition(colorData).slice(1);
+
+    gStatic.selectAll("line.k_line")
+        .transition()
+          .attr("opacity",function(d,i){ return d.i <= current_k ? 1: 0; });
+
+    gLineupBars.selectAll("rect")
+        .data(barData)
+      .transition()
+        .duration(500)
+        .attr("x", function(d) { return bar_x(d.x)+1; })
+        .attr("y", a_top + a_height + 2 )
+        .attr("width", function(d) { return Math.max(bar_x(d.dx)-2,0); })
+        .attr("stroke", function(d,i){ return d.name == most.name? "#000":"#fff"; })
+        ;
+/*
+    gLineupBars.selectAll("text.bar_label")
+      .data(barData)
+      .transition()
+        .duration(500)
+        .attr({
+          //"x": parseInt(dthis.attr("x")) + parseInt(dthis.attr("width")) / 2,
+          "x": function(d) { return bar_x(d.x)+1 + Math.max(bar_x(d.dx)-2,0)/2; },
+          "opacity": function(d,i){ return d.count > 0 ? 1: 0},
+          "text-anchor": "middle",
+          "font-size": circRad * 2.5 + "px"
+        });
+*/
+    gLineupBars.selectAll("text.bar_label")
+      .data(barData)
+      .transition()
+        .duration(250)
+        .attr("opacity", 0)
+        .each("end",function(d,i){
+          d3.select(this)
+              .text(function(d){ return d.count;})
+              .attr("x", function(d){ return bar_x(d.x)+1+Math.max(bar_x(d.dx)-2,0)/2; } )
+            .transition()
+              .duration(250)
+              .attr("opacity",function(d,i){ return d.count > 0 ? 1: 0});
+        });
+
+    gLineupBars.selectAll("line")
+      //.data(lineup_axis)
+      .transition()
+        .duration(500)
+        .attr({
+          "class": function(d,i){ return d.class; },
+          "x1": function(d,i){ return typeof d.x1 == "function" ? d.x1(): d.x1; },
+          "y1": function(d,i){ return typeof d.y1 == "function" ? d.y1(): d.y1; },
+          "x2": function(d,i){ return typeof d.x2 == "function" ? d.x2(): d.x2; },
+          "y2": function(d,i){ return typeof d.y2 == "function" ? d.y2(): d.y2; }
+        });
+  }
+
+  function offset_calc(d) {
+    return (d.radius / (sample_diameter / 2) ) * width * 0.9;
+  }
+
+  function circle_mouseover(d,i){
+
+    svg.selectAll("circle.data" + i)
+      .style("stroke","#000");
+
+    gStatic.append("circle")
+      .attr("class","hover_circle")
+      .attr("r", d.radius)
+      .attr("fill-opacity", 0)
+      .attr("stroke", "#ccc")
+      .attr("stroke-width",2)
+      .moveToBack();
+
+    gLineup.append("text")
+        .attr({
+          "class": "temp_k_label",
+          "x": offset_calc(d),
+          "y":  -( circRad + 6 ),
+          "fill-opacity": 0.6,
+          "text-anchor": "middle",
+          "font-size": circRad * 2.5 + "px"
+        })
+        .text( d.i );
+
+  }
+  function circle_mouseout(d,i){
+    svg.selectAll("circle.data" + i)
+      .style("stroke","#fff");
+
+    gStatic.selectAll("circle.hover_circle")
+      .interrupt().remove().transition();
+
+    gLineup.selectAll("text.temp_k_label")
+      .interrupt().remove().transition();
+
+  }
+}
+
+
+kNN_setup();
+
+</script>
+</p>

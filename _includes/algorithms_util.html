@@ -9,7 +9,35 @@ function F(name) {
         return (typeof prop === 'function' ? prop.apply(obj, arr) : prop);
     };
 }
+function dummySVGElement(elName){
+  return document.createElementNS(d3.ns.prefix.svg, elName);
+}
 
+Number.prototype.clamp = function(min, max) {
+  return Math.min(Math.max(this, min), max);
+}
+
+function clamp(num, min, max) {
+  return Math.min(Math.max(num, min), max);
+}
+d3.selection.prototype.moveToBack = function() { 
+    return this.each(function() { 
+        var firstChild = this.parentNode.firstChild; 
+        if (firstChild) { 
+            this.parentNode.insertBefore(this, firstChild); 
+        } 
+    }); 
+};
+d3.selection.prototype.moveToFront = function() {
+  return this.each(function(){
+    this.parentNode.appendChild(this);
+  });
+};
+function keySort(key,desc) {
+  return function(a,b){
+   return desc ? ~~(a[key] < b[key]) : ~~(a[key] > b[key]);
+  }
+}
 function distance(a, b) {
 
   var dx = a[0] - b[0],
