@@ -107,6 +107,7 @@ var svg = knn_div.append("svg")
 
 //svg.on("click",fadeout_and_restart);
 
+
 function fadeout_and_restart(dur){
   dur = dur || 500;
 
@@ -125,36 +126,83 @@ function kNN_setup(){
 
   var og = [width/2,sample_diameter/2];
 
+  var h_sd = sample_diameter/2;
+
   var circRad = (width/500 * 5).clamp(3,7);
+  var degOffset = Math.random()*360;
+  var testPoints = [{x:0,y:0,i:0,deg:0,radius:0}].concat(d3.range(3).map(function(d,i,a){
+
+    var radius = h_sd / 2 + ( Math.random() - 0.5 ) * ( h_sd / 3 );
+
+    var deg = i/a.length * 360 + degOffset + ( Math.random() - 0.5 ) * 45;
+    
+    var x = radius * Math.cos( toRadians(deg) );
+    var y = radius * Math.sin( toRadians(deg) );
+
+    return { 
+      x: x, 
+      y: y,
+      radius: radius,
+      deg: deg,
+      i: i + 1
+    };
+  }));
+
+  var currentTestPoint = 0;
+
+  degOffset = Math.random()*360;
 
   var typeColor = ["red","blue","green","orange"],
-      origin = [0,0],
-      points = d3.range(0,15)
-        .map(function(d,i,a){
-          // Random position distributed evenly by distance
-          var inner_rad = circRad + 10;//0.05 * sample_diameter;
-          var outer_rad = sample_diameter / 2;
+      origin = [0,0];
+  
+  var points = d3.range(15)
+    .map(function(d,i,a){
+      // Random position distributed evenly by distance
+      var inner_rad = circRad + 10;//0.05 * sample_diameter;
+      var outer_rad = sample_diameter / 2;
 
-          var radius = i / a.length * outer_rad
-                     + inner_rad // Space away from the center
-                     + (Math.random()-0.5) * 8; // Add some jitter
-          radius = radius.clamp(0,outer_rad-circRad);
+      var radius = i / a.length * outer_rad
+                 + inner_rad // Space away from the center
+                 + (Math.random()-0.5) * 8; // Add some jitter
+      radius = radius.clamp(0,outer_rad-circRad);
 
-          var deg = Math.random() * 360;
-          
-          var x = radius * Math.cos( toRadians(deg) );
-          var y = radius * Math.sin( toRadians(deg) );
-          
-          return  {
-                    x: x,
-                    y: y,
-                    type: Math.floor(( ((deg+30)%360) / 360)*3),
-                    radius: radius,
-                    deg: deg,
-                    i: i + 1
-                  };
-        });
+      var deg = Math.random() * 360;
+      
+      var x = radius * Math.cos( toRadians(deg) );
+      var y = radius * Math.sin( toRadians(deg) );
+      
+      return  {
+        x: x,
+        y: y,
+        type: Math.floor(( ( (deg+degOffset) % 360) / 360 )*3 ),
+        //radius: radius,
+        radii: testPoints.map(function(d2,i2){ return distance([d2.x,d2.y],[x,y]); }),
+        deg: deg,
+        i: []
+      };
+    });
 
+  testPoints.map(function(tpd,tpi){
+    tpd.points = points.concat().sort(function(a,b){
+      return (+a.radii[tpd.i]) - (+b.radii[tpd.i]) ;
+    });
+    tpd.points.map(function(d,i){
+      d.i[tpd.i] = i;
+    });
+  });
+
+  testPoints.map(function(tpd,tpi){
+    console.log(
+      tpd.points.reduce(function(p,v){
+        return p + v.i[tpd.i] + ", ";
+      }, tpd.i + ": ")
+    )
+    console.log(
+      tpd.points.reduce(function(p,v){
+        return p + v.i[0] + ", ";
+      }, tpd.i + ": ")
+    )
+  });
 
   var tf = {
     //scale: "scale(" + ( width/500 ) + ")",
@@ -169,12 +217,20 @@ function kNN_setup(){
 
   gLineup.append("circle")
     .attr("class","origin lineup")
-    .attr("r",circRad)
-    .attr("cx", origin[0])
-    .attr("cy", origin[1]);
+    .attr({
+      "r": circRad,
+      "cx": origin[0],
+      "cy": origin[1],
+      "r": circRad,
+      //"fill-opacity": 0,
+      "fill": "#FFF",
+      "stroke": "#000",
+      "stroke-width": 2,
+      //"opacity": 0
+    });
 
   gLineup.selectAll("circle.data")
-      .data(points)
+      .data(testPoints[currentTestPoint].points)
     .enter().append("circle")
       .attr({
         "class" : function(d,i){ return "data lineup data" + i; },
@@ -202,7 +258,27 @@ function kNN_setup(){
     .attr("class","g_static")
     .attr("transform", tf.scale + tf.translate);
 
-  console.log(sample_diameter / 2);
+  var gTestPoints = gStatic.append("g")
+    .attr("class","g_testpoints");
+
+  gTestPoints.selectAll("circle.testpoint")
+      .data(testPoints)
+    .enter().append("circle")
+      .attr({
+        "class": "testpoint",
+        "cx": F("x"),
+        "cy": F("y"),
+        "r": circRad,
+        "fill-opacity": 1,
+        "fill": "#FFF",
+        "stroke": "#000",
+        "stroke-width": 2,
+        "opacity": 0
+      })
+      .on("click",new_testPoint)
+      .moveToFront()
+      .transition()
+        .attr('opacity', 1);
 
   var half_sd = sample_diameter / 2 + 5;
 
@@ -214,6 +290,7 @@ function kNN_setup(){
       "x2": half_sd,
       "y2": half_sd,
     });  
+
   gStatic.append("line")
     .attr({
       "class": "y axis",
@@ -223,14 +300,29 @@ function kNN_setup(){
       "y2": -half_sd + 10
     });
 
-  gStatic.append("circle")
-    .attr("class","origin static")
-    .attr("r", circRad)
-    .attr("cx", origin[0])
-    .attr("cy", origin[1]);
+    gStatic.selectAll("g.g_k_lines")
+      .data(testPoints)
+    .enter().append("g")
+      .attr("class", function(d,i){ return "g_k_lines testpoint" + i; })
+      .each(function(tpd,tpi){
+
+        d3.select(this).selectAll("line.k_line.testpoint" + tpi)
+            .data(testPoints[currentTestPoint].points)
+          .enter().append("line")
+            .attr({
+              "class":"k_line testpoint" + tpi,
+              "x1": tpd.x, "y1": tpd.y,
+              "x2": function(d){ return d.x; },
+              "y2": function(d){ return d.y; },
+              "opacity": 0
+            })
+            .moveToBack()
+            .transition()
+              .attr("opacity",function(d,i){ return d.i[currentTestPoint] <= current_k && tpi == currentTestPoint ? 1: 0; });
+      });
 
   gStatic.selectAll("circle.data")
-      .data(points)
+      .data(testPoints[currentTestPoint].points)
     .enter().append("circle")
       .attr({
         "class" : function(d,i){ return "data static data" + i; },
@@ -268,9 +360,9 @@ function kNN_setup(){
   var a_points = [
     [0,a_top],
     [0,a_top + a_height],
-    [function(){ return offset_calc(points[current_k-1]); },
+    [function(){ return offset_calc(testPoints[currentTestPoint].points[current_k-1]); },
       a_top + a_height],
-    [function(){ return offset_calc(points[current_k-1]); },
+    [function(){ return offset_calc(testPoints[currentTestPoint].points[current_k-1]); },
       a_top]
   ];
 
@@ -289,21 +381,28 @@ function kNN_setup(){
   var colorCount = d3.range(0,typeColor.length)
   .map(function(d,i,a){
     return {
-      count: 0,
+      count: testPoints.map(function(){ return 0; }),
       name: typeColor[i],
-      first: d3.min(points.filter(function(d2,i2){ return d2.type == i; }),
-                    function(d4){ return d4.i; })
+      first: testPoints.map(function(tpd,tpi){
+        return d3.min(
+                  tpd.points.filter(function(d2,i2){ return d2.type == i; }),
+                  function(d4){ return d4.i[tpi]; }
+                  )
+      })
     };
   });
+  //debugger;
 
   var partition = d3.layout.partition()
-    .value(function(d) { return d.count; })
-    .sort(keySort("first"));
+    .value(function(d) { return d.count[currentTestPoint]; })
+    .sort(function(a,b){
+      return (+a.first[currentTestPoint]) - (+b.first[currentTestPoint]) ;
+    });
 
   function add_scales(){
-    //debugger;
+
     gLineup.selectAll("text")
-        .data( [0, points[current_k-1]] )
+        .data( [0, testPoints[currentTestPoint].points[current_k-1]] )
       .enter().append("text")
         .attr({
           "class": function(d,i) { return i? "k_label": "k_eq_label"; },
@@ -313,7 +412,7 @@ function kNN_setup(){
           "text-anchor": "middle",
           "font-size": circRad * 2.5 + "px"
         })
-        .text( function (d) { return d.i ? d.i: "k ="; })
+        .text( function (d) { return d ? d.i[currentTestPoint] + 1: "k ="; })
         .transition()
           .duration(500)
           .attr("opacity",1);
@@ -332,23 +431,38 @@ function kNN_setup(){
       .transition()
       .attr("opacity",1);
 
-    var barWidth = offset_calc(points[current_k-1]);
+    var barWidth = offset_calc(testPoints[currentTestPoint].points[current_k-1]);
 
-    colorCount.map(function(d){ d.count = 0; });
+    colorCount.map(function(d){ d.count = testPoints.map(function(){ return 0; }); });
 
-    points.slice(0,current_k).map(function(d,i,a){
-      colorCount[d.type].count++;
+    testPoints.map(function(tpd,tpi) {
+      tpd.points.slice(0,current_k).map(function(d,i,a){
+        colorCount[d.type].count[tpi]++;
+      });
     });
 
-    var most = colorCount.reduce(
-      function(p, v) { 
-        if( v.count == p.count )
-          return v.first < p.first ? v : p;
-        else
-          return v.count > p.count ? v : p;
-      }, {count:0,first:points.length});
+    var most = testPoints.map(function(tpd,tpi) {
+      return colorCount.reduce( 
+        function(p, v) { 
+          if( v.count[tpi] == p.count[tpi] )
+            return v.first[tpi] < p.first[tpi] ? v : p;
+          else
+            return v.count[tpi] > p.count[tpi] ? v : p;
+        },
+        {
+          count:testPoints.map(function(){ return 0; }),
+          first:[points.length]
+        }
+      );
+    });
 
-    console.log(most.name);
+    console.log(most);
+
+    gStatic.selectAll("circle.testpoint")
+      .attr('fill-opacity', 0.6)
+      .transition()
+        .duration(500)
+        .attr("fill", function(d,i){ return most[d.i].name })
 
     var colorData = {
       "name": "root",
@@ -361,20 +475,6 @@ function kNN_setup(){
 
     var barData = partition(colorData).slice(1);
 
-    gStatic.selectAll("line.k_line")
-        .data(points)
-      .enter().append("line")
-        .attr({
-          "class":"k_line",
-          "x1": 0, "y1": 0,
-          "x2": function(d){ return d.x},
-          "y2": function(d){ return d.y},
-          "opacity": 0
-        })
-        .moveToBack()
-        .transition()
-          .attr("opacity",function(d,i){ return d.i <= current_k ? 1: 0; });
-
     gLineupBars.selectAll("rect")
       .data(barData)
     .enter().append("rect")
@@ -383,7 +483,7 @@ function kNN_setup(){
       .attr("width", function(d) { return Math.max(bar_x(d.dx)-2,0); })
       .attr("height", 15)
       .attr("fill", function(d) { return d.name; })
-      .attr("stroke", function(d,i){ return d.name == most.name? "#000":"#fff"; })
+      .attr("stroke", function(d,i){ return d.name == most[currentTestPoint].name? "#000":"#fff"; })
       .attr("stroke-width", 2)
       .attr("opacity",0)
       .transition()
@@ -396,11 +496,11 @@ function kNN_setup(){
         "class": function(d,i){ return "bar_label bar" + i; },
         "x": function(d) { return bar_x(d.x)+1 + Math.max(bar_x(d.dx)-2,0)/2; },
         "y": a_top + a_height + 30,
-        "opacity": function(d,i){ return d.count > 0 ? 1: 0},
+        "opacity": function(d,i){ return d.count[currentTestPoint] > 0 ? 1: 0},
         "text-anchor": "middle",
         "font-size": circRad * 2.5 + "px"
       })
-      .text(function(d){ return d.count; });
+      .text(function(d){ debugger; return d.count[currentTestPoint]; });
 
     gLineup.append("text")
       .attr({
@@ -412,11 +512,21 @@ function kNN_setup(){
       })
       .text("Click on a point to change k")
       .transition()
-        .attr("opacity",1)
+        .attr("opacity",1);
+
+    gStatic.selectAll("g.g_k_lines line")
+      .filter(function(d,i){ return d3.select(this).classed("testpoint" + currentTestPoint); })
+      .transition()
+        .duration(250)
+        .attr("opacity",function(d,i){ return d.i[currentTestPoint] < current_k  ? 1: 0; });
+
+    gStatic.selectAll("g.g_testpoints")
+      .moveToFront();
+
   }
 
   function new_k(d,i){
-    current_k = i + 1;
+    current_k = d.i[currentTestPoint] + 1;
 
     gLineup.select("text.k_label")
       .transition()
@@ -424,30 +534,46 @@ function kNN_setup(){
       .attr("opacity",0)
       .each("end", function(d,i){
         d3.select(this)
-            .attr("x", offset_calc(points[current_k-1]) )
+            .attr("x", offset_calc(testPoints[currentTestPoint].points[current_k-1]) )
             .text(current_k)
             .transition()
               .duration(250)
               .attr("opacity",1);
       });
 
-    var barWidth = offset_calc(points[current_k-1]);
+    var barWidth = offset_calc(testPoints[currentTestPoint].points[current_k-1]);
 
-    colorCount.map(function(d){ d.count = 0; });
+    
+    colorCount.map(function(d){ d.count = testPoints.map(function(){ return 0; }); });
 
-    points.slice(0,current_k).map(function(d,i,a){
-      colorCount[d.type].count++;
+    testPoints.map(function(tpd,tpi) {
+      tpd.points.slice(0,current_k).map(function(d,i,a){
+        colorCount[d.type].count[tpi]++;
+      });
     });
 
-    var most = colorCount.reduce(
-      function(p, v) { 
-        if( v.count == p.count )
-          return v.first < p.first ? v : p;
-        else
-          return v.count > p.count ? v : p;
-      }, {count:0,first:points.length});
+    var most = testPoints.map(function(tpd,tpi) {
+      return colorCount.reduce( 
+        function(p, v) { 
+          if( v.count[tpi] == p.count[tpi] )
+            return v.first[tpi] < p.first[tpi] ? v : p;
+          else
+            return v.count[tpi] > p.count[tpi] ? v : p;
+        },
+        {
+          count:testPoints.map(function(){ return 0; }),
+          first:[points.length]
+        }
+      );
+    });
 
-    console.log(most.name);
+    gStatic.selectAll("circle.testpoint")
+      .attr('fill-opacity', 0.6)
+      .transition()
+        .duration(500)
+        .attr("fill", function(d,i){ return most[d.i].name })
+
+    console.log(most);
 
     var colorData = {
       "name": "root",
@@ -460,9 +586,18 @@ function kNN_setup(){
 
     var barData = partition(colorData).slice(1);
 
-    gStatic.selectAll("line.k_line")
-        .transition()
-          .attr("opacity",function(d,i){ return d.i <= current_k ? 1: 0; });
+    var kLineTemp = gStatic.transition()
+        .duration(250)
+        .each(function(d,i){
+          gStatic.select("g.testpoint"+currentTestPoint)
+            .selectAll("line")
+            .transition()
+              .attr("opacity",function(d,i){ return d.i[currentTestPoint] < current_k ? 1: 0; });
+        });
+
+    /*kLineTemp.selectAll("line.k_line")
+        .attr("opacity",0);*/
+    
 
     gLineupBars.selectAll("rect")
         .data(barData)
@@ -471,21 +606,9 @@ function kNN_setup(){
         .attr("x", function(d) { return bar_x(d.x)+1; })
         .attr("y", a_top + a_height + 2 )
         .attr("width", function(d) { return Math.max(bar_x(d.dx)-2,0); })
-        .attr("stroke", function(d,i){ return d.name == most.name? "#000":"#fff"; })
+        .attr("stroke", function(d,i){ return d.name == most[currentTestPoint].name? "#000":"#fff"; })
         ;
-/*
-    gLineupBars.selectAll("text.bar_label")
-      .data(barData)
-      .transition()
-        .duration(500)
-        .attr({
-          //"x": parseInt(dthis.attr("x")) + parseInt(dthis.attr("width")) / 2,
-          "x": function(d) { return bar_x(d.x)+1 + Math.max(bar_x(d.dx)-2,0)/2; },
-          "opacity": function(d,i){ return d.count > 0 ? 1: 0},
-          "text-anchor": "middle",
-          "font-size": circRad * 2.5 + "px"
-        });
-*/
+
     gLineupBars.selectAll("text.bar_label")
       .data(barData)
       .transition()
@@ -493,11 +616,11 @@ function kNN_setup(){
         .attr("opacity", 0)
         .each("end",function(d,i){
           d3.select(this)
-              .text(function(d){ return d.count;})
+              .text(function(d){ return d.count[currentTestPoint];})
               .attr("x", function(d){ return bar_x(d.x)+1+Math.max(bar_x(d.dx)-2,0)/2; } )
             .transition()
               .duration(250)
-              .attr("opacity",function(d,i){ return d.count > 0 ? 1: 0});
+              .attr("opacity",function(d,i){ return d.count[currentTestPoint] > 0 ? 1: 0});
         });
 
     gLineupBars.selectAll("line")
@@ -513,8 +636,38 @@ function kNN_setup(){
         });
   }
 
+  function new_testPoint(d,i){
+    currentTestPoint = d.i;
+
+    gLineup.selectAll("circle.data")
+      //.data(testPoints[currentTestPoint].points)
+      .transition()
+        .duration(250)
+        .attr("cx", function(d,i){ return offset_calc(d); })
+        // .each("end", function(d,i){
+        //   if ( current_k == i ) new_k(d,i);
+        // })
+        ;
+    gStatic.selectAll("g.g_k_lines line")
+      .transition()
+        .duration(250)
+        .attr("opacity",0)
+        .each("end",function(d,i){
+          d3.select(this)
+            .filter(function(d2,i2){ return d3.select(this).classed("testpoint" + currentTestPoint); })
+            .transition()
+            .duration(250)
+            .attr("opacity",function(d,i){ return d.i[currentTestPoint] <= current_k ? 1: 0; });
+        });
+
+    gLineup.selectAll("circle.data")
+      .filter(function(d,i){ return d.i[currentTestPoint] == current_k - 1;})
+      .each(new_k);
+  }
+
   function offset_calc(d) {
-    return (d.radius / (sample_diameter / 2) ) * width * 0.9;
+    var c = currentTestPoint;
+    return (d.radii[c] / (testPoints[c].points.slice(-1)[0].radii[c] ) ) * width * 0.9;
   }
 
   function circle_mouseover(d,i){
@@ -524,7 +677,9 @@ function kNN_setup(){
 
     gStatic.append("circle")
       .attr("class","hover_circle")
-      .attr("r", d.radius)
+      .attr("r", d.radii[currentTestPoint])
+      .attr("cx", testPoints[currentTestPoint].x)
+      .attr("cy", testPoints[currentTestPoint].y)
       .attr("fill-opacity", 0)
       .attr("stroke", "#ccc")
       .attr("stroke-width",2)
@@ -539,7 +694,7 @@ function kNN_setup(){
           "text-anchor": "middle",
           "font-size": circRad * 2.5 + "px"
         })
-        .text( d.i );
+        .text( d.i[currentTestPoint] + 1 );
 
   }
   function circle_mouseout(d,i){
