@@ -130,30 +130,38 @@ function kNN_setup(){
 
   var circRad = (width/500 * 5).clamp(3,7);
   var degOffset = Math.random()*360;
-  var testPoints = [{x:0,y:0,i:0,deg:0,radius:0}].concat(d3.range(3).map(function(d,i,a){
+  var testPoints = [{x:0,y:0,i:0,deg:0,radius:0}].concat(
+      d3.range(3).map(function(d,i,a){
 
-    var radius = h_sd / 2 + ( Math.random() - 0.5 ) * ( h_sd / 3 );
+        var radius = h_sd / 2 + ( Math.random() - 0.5 ) * ( h_sd / 3 );
 
-    var deg = i/a.length * 360 + degOffset + ( Math.random() - 0.5 ) * 45;
-    
-    var x = radius * Math.cos( toRadians(deg) );
-    var y = radius * Math.sin( toRadians(deg) );
+        var deg = i/a.length * 360 + degOffset + ( Math.random() - 0.5 ) * 45;
+        
+        var x = radius * Math.cos( toRadians(deg) );
+        var y = radius * Math.sin( toRadians(deg) );
 
-    return { 
-      x: x, 
-      y: y,
-      radius: radius,
-      deg: deg,
-      i: i + 1
-    };
-  }));
+        return { 
+          x: x, 
+          y: y,
+          radius: radius,
+          deg: deg,
+          i: i + 1
+        };
+      })
+    );
 
   var currentTestPoint = 0;
+  var current_k = 4;
 
   degOffset = Math.random()*360;
 
-  var typeColor = ["red","blue","green","orange"],
-      origin = [0,0];
+  var colScale = d3.scale.category10();
+  //var typeColor = ["red","blue","green","orange"];
+
+  var typeColor = d3.range(3).map(function(d,i){
+    return colScale(d);
+  }),
+    origin = [0,0];
   
   var points = d3.range(15)
     .map(function(d,i,a){
@@ -174,7 +182,7 @@ function kNN_setup(){
       return  {
         x: x,
         y: y,
-        type: Math.floor(( ( (deg+degOffset) % 360) / 360 )*3 ),
+        type: Math.floor(( ( (deg+degOffset) % 360) / 360 )*typeColor.length ),
         //radius: radius,
         radii: testPoints.map(function(d2,i2){ return distance([d2.x,d2.y],[x,y]); }),
         deg: deg,
@@ -191,18 +199,43 @@ function kNN_setup(){
     });
   });
 
-  testPoints.map(function(tpd,tpi){
-    console.log(
-      tpd.points.reduce(function(p,v){
-        return p + v.i[tpd.i] + ", ";
-      }, tpd.i + ": ")
-    )
-    console.log(
-      tpd.points.reduce(function(p,v){
-        return p + v.i[0] + ", ";
-      }, tpd.i + ": ")
-    )
-  });
+  debugger;
+  var bcs = bestCandidateSampler(400, 400, 3, 16000);
+  var bcsPoints = d3.range(16000)
+                    .map(function(){ return bcs(); })
+                    .map(function(d){ 
+                      var x = d[0] - 200,
+                          y = d[1] - 200;
+                      return {
+                        x: x,
+                        y: y,
+                        points: points.slice()
+                          .map(function(pd,pi){
+                            return {
+                              d: distance([x,y],[pd.x,pd.y]),
+                              point: pd
+                            }
+                          })
+                          .sort(function(a,b){
+                            return (+a.d) - (+b.d);
+                          })
+                          .map(function(pd,pi){
+                            return pd.point.type;
+                          })
+                          .reduce(function(p,v){
+                            p.count[v]++;
+                            p.most.push(p.count.indexOf(Math.max.apply(Math, p.count)));
+                            return p;
+                          },{count:typeColor.map(function(){ return 0; }),most:[]})
+                      };
+                    });
+  debugger;
+
+  var voronoi = d3.geom.voronoi()
+    .clipExtent([[-200,-200], [200,200]])
+    .x(function(d){ return d.x;})
+    .y(function(d){ return d.y;});
+
 
   var tf = {
     //scale: "scale(" + ( width/500 ) + ")",
@@ -257,6 +290,56 @@ function kNN_setup(){
   var gStatic = svg.append("g")
     .attr("class","g_static")
     .attr("transform", tf.scale + tf.translate);
+
+  var gVoronoi = gStatic.append("g")
+    .attr("class","voronoi").moveToBack();
+
+  var voroCalc = voronoi(bcsPoints);
+
+  var voroGrouped = points.map(function(pd,pi){
+    return typeColor.map(function(d,i){
+        return {
+          d:voroCalc.filter(function(vd,vi){
+              return vd.point.points.most[pi] == i;
+            }).reduce(function(p,v){
+              return p + " M" + v.join("L") + "Z";
+            },""),
+          name: d
+        };
+        
+      });
+
+  });
+  debugger;
+  
+  gVoronoi.selectAll("g")
+    //.data(voroCalc)
+    .data(voroGrouped)
+  .enter().append("g")
+    .attr("class",function(d,i){ return "voronoi" + i;})
+    .attr("visibility",function(d,i){ return i == current_k - 1 ? "visible": "hidden"; })
+    .each(function(d,i){
+      d3.select(this).selectAll("path")
+          .data(d)
+        .enter().append("path")
+          .attr("fill", F("name"))
+          .attr('fill-opacity', 0.5)
+          .attr("d", F("d"));
+    })
+
+
+  // gVoronoi.selectAll("circle")
+  //   .data(bcsPoints)
+  // .enter().append("circle")
+  //   .attr("class","voronoi")
+  //   .attr("cx", F("x"))
+  //   .attr("cy", F("y"))
+  //   .attr('r',2)
+  //   .style("fill", function(d) { debugger; return typeColor[d.points.most[current_k-1]]; })
+  //   .attr('fill-opacity', 0.5)
+  //   //.attr('stroke')
+  //   //.attr("d", function(d) { return "M" + d.join("L") + "Z"; });
+  //   ;
 
   var gTestPoints = gStatic.append("g")
     .attr("class","g_testpoints");
@@ -351,7 +434,6 @@ function kNN_setup(){
         .attr("cx",function(d){ return  offset_calc(d); })
     });
 
-  var current_k = 4;
   
   var gLineupBars = gLineup.append("g").attr("class","lineup_bars");
   var a_height = 10;
@@ -391,7 +473,6 @@ function kNN_setup(){
       })
     };
   });
-  //debugger;
 
   var partition = d3.layout.partition()
     .value(function(d) { return d.count[currentTestPoint]; })
@@ -456,13 +537,17 @@ function kNN_setup(){
       );
     });
 
-    console.log(most);
-
     gStatic.selectAll("circle.testpoint")
       .attr('fill-opacity', 0.6)
       .transition()
         .duration(500)
-        .attr("fill", function(d,i){ return most[d.i].name })
+        .attr("fill", function(d,i){ return most[d.i].name });
+
+    gLineup.select("circle.origin")
+      .attr('fill-opacity', 0.6)
+      .transition()
+        .duration(500)
+        .attr("fill", function(d,i){ return most[currentTestPoint].name });
 
     var colorData = {
       "name": "root",
@@ -500,7 +585,7 @@ function kNN_setup(){
         "text-anchor": "middle",
         "font-size": circRad * 2.5 + "px"
       })
-      .text(function(d){ debugger; return d.count[currentTestPoint]; });
+      .text(function(d){ return d.count[currentTestPoint]; });
 
     gLineup.append("text")
       .attr({
@@ -541,6 +626,10 @@ function kNN_setup(){
               .attr("opacity",1);
       });
 
+    gVoronoi.selectAll("g")
+      .attr("visibility",function(d,i){ return i == current_k - 1 ? "visible": "hidden"; })
+      //.attr("fill", function(d) { return typeColor[d.point.points.most[current_k-1]]; })
+      ;
     var barWidth = offset_calc(testPoints[currentTestPoint].points[current_k-1]);
 
     
@@ -567,13 +656,21 @@ function kNN_setup(){
       );
     });
 
+
+
+
+
     gStatic.selectAll("circle.testpoint")
       .attr('fill-opacity', 0.6)
       .transition()
         .duration(500)
-        .attr("fill", function(d,i){ return most[d.i].name })
+        .attr("fill", function(d,i){ return most[d.i].name });
 
-    console.log(most);
+    gLineup.select("circle.origin")
+      .attr('fill-opacity', 0.6)
+      .transition()
+        .duration(500)
+        .attr("fill", function(d,i){ return most[currentTestPoint].name });
 
     var colorData = {
       "name": "root",
