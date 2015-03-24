@@ -1,53 +1,31 @@
-# Build settings
+name: Data Mining Blog
 markdown: redcarpet
 highlighter: pygments
+#Comment out url when working locally to resolve base urls correctly
+#url: http://dehnx058.github.io/
+paginate: 8
+#description:     Jekyll theme for Programmers
+#intro: White Paper is a Jekyll theme most suited to be used on tech blogs that like their content to shine.
+logo:             logo.png
+disqus_shortname:
 
-# Site settings
-title: "A Jekyll Test Site"
-description: > # this means to ignore newlines until "email:"
-   A Jekyll test site. Check it out.
+# Owner/author information
+owner:
+  name:           Greyson Dehn
+  avatar:         /assets/images/author.jpg
+  email:          dehnx058@umn.edu
+  # Social networking links used in footer. Update and remove as you like.
+  twitter:
+  github:		  https://github.com/dehnx058
+  stackexchange:
+  # For Google Authorship https://plus.google.com/authorship
+  google_plus:
 
-email: dehnx058@umn.edu
-#blog logo
-logo: "/assets/images/df_logo.jpg"
-# blog cover
-cover: "/assets/images/cA4aKEIPQrerBnp1yGHv_IMG_9534-3-2.jpg"
+# Analytics and webmaster tools stuff goes here
+google_analytics:
+google_verify:
+# https://ssl.bing.com/webmaster/configure/verify/ownership Option 2 content= goes here
+bing_verify:
 
-name: 'Greyson Dehn'
-author: 'Greyson Dehn'
-author_image: "/assets/images/author.jpg"
-
-paginate:	5
-
-url: "http://dehnx058.github.io" # the base hostname & protocol for your site
-baseurl: ""
-
-# social icons and sharing options
-social:
-#  - icon:	twitter
-#    url:	https://twitter.com/dirkfabisch
-#    desc: Follow me on twitter
-#    share_url: http://twitter.com/share
-#    share_title: ?text=
-#    share_link: "&amp;url="
-
-#  - icon:	facebook
-#    url:	https://facebook.com/???
-#    desc: Connect with me facebook
-#    share_url: //www.facebook.com/sharer.php
-#    share_title: ?t=
-#    share_link: "&amp;u="
-
-  - icon:	github
-    url:	https://github.com/dehnx058
-    desc:	Fork me on github
-    share_url:
-    share_title:
-    share_link:
-
-#  - icon:	google-plus
-#    url:	https://google.com/???
-#    desc:	Add me on google+
-#    share_url:
-#    share_title:
-#    share_link:
+# Links to include in top navigation
+# For external links add external: true
