@@ -1,0 +1,486 @@
+{% raw %}
+<style>
+
+#d-tree-viz svg {
+  border: solid 1px #ccc;
+}
+
+.node rect {
+  fill: #fff;
+  stroke: lightgrey;
+  stroke-width: 3px;
+  -webkit-transition: stroke 0.5s;
+  transition: stroke 0.5s;
+}
+
+.node rect.leaf {
+  fill: #fff;
+  stroke: grey;
+  stroke-width: 3px;
+  -webkit-transition: stroke 0.5s;
+  transition: stroke 0.5s;
+}
+
+.node.curRecord rect {
+  stroke: steelblue;
+}
+
+.node.curRecord rect.leaf {
+  stroke: lightgreen;
+}
+
+.node text { font: 12px sans-serif; }
+
+.link {
+  fill: none;
+  stroke: #ccc;
+  stroke-width: 2px;
+  -webkit-transition: stroke 0.5s;
+  transition: stroke 0.5s;
+}
+
+.curRecord path.link {
+  stroke: #000;
+}
+
+path.arrow {
+  fill-opacity: 0;
+  fill: black;
+  -webkit-transition: fill-opacity 0.5s;
+  transition: fill-opacity 0.5s;
+}
+
+path.arrow.hide {
+  fill-opacity: 0 !important;
+  fill: black;
+}
+
+.curRecord path.arrow {
+  fill-opacity: 1;
+}
+
+.curRecord text.shadow {
+  stroke: white;
+  stroke-width: 3px;
+  filter: url(#shadow);
+}
+
+tr:hover {
+  background-color: #eee;
+}
+tr.curRecord {
+  background-color: #ddd;
+}
+.animation {
+  background-color: white;
+}
+div#tableContainer {
+  position: absolute;
+  width: 50%;
+  top: 29%;
+  left: 28px;
+}
+div#tableContainer table {
+  border-spacing: 0px;
+}
+div#tableContainer span {
+  text-align: center;
+}
+div#tableContainer span p {
+  font-size: 14px;
+}
+</style>
+<div class="animation" id="d-tree-viz">
+  <div id="tableContainer">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Home Owner</th>
+          <th>Marital Status</th>
+          <th>Annual Income</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr onclick="update(0)">
+          <td>1</td>
+          <td>Yes</td>
+          <td>Single</td>
+          <td>125000</td>
+        </tr>
+        <tr onclick="update(1)">
+          <td>2</td>
+          <td>No</td>
+          <td>Married</td>
+          <td>100000</td>
+        </tr>
+        <tr onclick="update(2)">
+          <td>3</td>
+          <td>No</td>
+          <td>Single</td>
+          <td>70000</td>
+        </tr>
+        <tr onclick="update(3)">
+          <td>4</td>
+          <td>Yes</td>
+          <td>Married</td>
+          <td>120000</td>
+        </tr>
+        <tr onclick="update(4)">
+          <td>5</td>
+          <td>No</td>
+          <td>Divorced</td>
+          <td>95000</td>
+        </tr>
+        <tr onclick="update(5)">
+          <td>6</td>
+          <td>No</td>
+          <td>Married</td>
+          <td>60000</td>
+        </tr>
+        <tr onclick="update(6)">
+          <td>7</td>
+          <td>Yes</td>
+          <td>Divorced</td>
+          <td>220000</td>
+        </tr>
+        <tr onclick="update(7)">
+          <td>8</td>
+          <td>No</td>
+          <td>Single</td>
+          <td>85000</td>
+        </tr>
+        <tr onclick="update(8)">
+          <td>9</td>
+          <td>No</td>
+          <td>Married</td>
+          <td>75000</td>
+        </tr>
+        <tr onclick="update(9)">
+          <td>10</td>
+          <td>No</td>
+          <td>Single</td>
+          <td>90000</td>
+        </tr>
+      </tbody>
+    </table>
+    <span>
+      <p>Click on a record to see its label.</p>
+    </span>
+  </div>
+</div>
+<script>
+var tree;
+var records = [
+  { 
+    home_owner: true,
+    marital_status: "Single",
+    annual_income: 125000,
+    defaulted: false
+  },
+  { 
+    home_owner: false,
+    marital_status: "Married",
+    annual_income: 100000,
+    defaulted: false
+  },
+  { 
+    home_owner: false,
+    marital_status: "Single",
+    annual_income: 70000,
+    defaulted: false
+  },
+  { 
+    home_owner: true,
+    marital_status: "Married",
+    annual_income: 120000,
+    defaulted: false
+  },
+  { 
+    home_owner: false,
+    marital_status: "Divorced",
+    annual_income: 95000,
+    defaulted: true
+  },
+  { 
+    home_owner: false,
+    marital_status: "Married",
+    annual_income: 60000,
+    defaulted: false
+  },
+  { 
+    home_owner: true,
+    marital_status: "Divorced",
+    annual_income: 220000,
+    defaulted: false
+  },
+  { 
+    home_owner: false,
+    marital_status: "Single",
+    annual_income: 85000,
+    defaulted: true
+  },
+  { 
+    home_owner: false,
+    marital_status: "Married",
+    annual_income: 75000,
+    defaulted: false
+  },
+  { 
+    home_owner: false,
+    marital_status: "Single",
+    annual_income: 90000,
+    defaulted: true
+  }
+];
+
+var curRecord = 0;
+
+var recordMatrix = [
+  ["Yes","Single","125000"],
+  ["No","Married","100000"],
+  ["No","Single","70000"],
+  ["Yes","Married","120000"],
+  ["No","Divorced","95000"],
+  ["No","Married","60000"],
+  ["Yes","Divorced","220000"],
+  ["No","Single","85000"],
+  ["No","Married","75000"],
+  ["No","Single","90000"]
+];
+var rootNode = {
+  "name": "",
+  "text": "Home Owner",
+  "test": function(d){ return true; },
+  "leaf": false,
+  "children": [
+    {
+      "name": "Yes",
+      "text": "Defaulted = No",
+      "test": function(d){ return d.home_owner; },
+      "leaf": true,
+    },
+    {
+      "name": "No",
+      "text": "Marital Status",
+      "test": function(d){ return !d.home_owner; },
+      "leaf": false,
+      "children": [
+        {
+          "name": "Single, Divorced",
+          "text": "Annual Income",
+          "test": function(d){ return ["Single","Divorced"].indexOf(d.marital_status) >= 0; },
+          "leaf": false,
+          "children": [
+            {
+              "name": "< 80K",
+              "text": "Defaulted = No",
+              "test": function(d){ return d.annual_income < 80000; },
+              "leaf": true
+            },
+            {
+              "name": ">= 80K",
+              "text": "Defaulted = Yes",
+              "test": function(d){ return d.annual_income >= 80000; },
+              "leaf": true
+            }
+          ]
+          
+        },
+        {
+          "name": "Married",
+          "text": "Defaulted = No",
+          "test": function(d){ return d.marital_status == "Married"; },
+          "leaf": true
+        }
+      ]
+    }
+  ]
+};
+
+//var recordTable = tabulate(recordMatrix,["Home Owner","Marital Status","Annual Income"], "#tableContainer");
+
+var update;
+
+(function() {
+  
+  var width = 700,
+      height = 500;
+
+  var nodeBoxWidth = 100,
+      nodeBoxHeight = 30;
+  
+  var p = d3.select("#d-tree-viz")
+    //.on("click", update);
+
+  //d3.select().append(recordTable);
+
+  var svg = p.append("svg")
+      .attr("width", width)
+      .attr("height", height);
+
+  var gTree = svg.append("g")
+    .attr("transform", "translate(" + (width/2.0 + 150) + "," + 30 + ")");
+ 
+  tree = d3.layout.tree()
+    .nodeSize([120,100])
+    //.size([height, width])
+    ;
+
+  var diagonal = d3.svg.diagonal()
+    .projection(function(d) { return [d.x, d.y]; });
+  
+  var i = 0;
+
+  // Compute the new tree layout.
+  var nodes = tree.nodes(rootNode).reverse(),
+    links = tree.links(nodes);
+  
+  for (var i = 0; i < nodes.length; i++) {
+    nodes[i].links = [];
+  };
+
+  for (var i = 0; i < links.length; i++) {
+    links[i].source.links.push( links[i] );
+  };
+
+  // Normalize for fixed-depth.
+  //nodes.forEach(function(d) { d.y = d.depth * 100; });
+
+  // Declare the nodes…
+  var node = gTree.selectAll("g.node")
+    .data(nodes, function(d) { return d.id || (d.id = ++i); });
+
+  // Enter the nodes.
+  var nodeEnter = node.enter().append("g")
+    .attr("class", "node test")
+    .attr("transform", function(d) { 
+      return "translate(" + d.x + "," + d.y + ")"; 
+    })
+    .each(function(d,i){
+      d.el = this;
+    });
+
+  nodeEnter.append("rect")
+    .attr({
+      "x": -nodeBoxWidth/2,
+      "y": -nodeBoxHeight/2,
+      "width": nodeBoxWidth,
+      "height": nodeBoxHeight,
+      "rx": function(d){ return d.leaf ? 0: 15; },
+      "ry": function(d){ return d.leaf ? 0: 15; },
+      "class": function(d){ return d.leaf ? "leaf test" : "question test"; }
+    })
+    .style("fill", "#fff");
+
+  nodeEnter.append("text")
+    .attr("y", function(d) { return 0; })
+    .attr("dy", ".35em")
+    .attr("text-anchor", "middle")
+    .attr("class", "test")
+    .text(function(d) { return d.text; })
+    .style("fill-opacity", 1);
+
+  nodeEnter.append("text")
+    .attr("y", function(d) { return -(nodeBoxHeight/2 + 10); })
+    .attr("dy", ".35em")
+    .attr("text-anchor", "middle")
+    .attr("class", "test shadow")
+    .text(function(d) { return d.name; })
+    .style("fill-opacity", 1);
+
+  nodeEnter.append("text")
+    .attr("y", function(d) { return -(nodeBoxHeight/2 + 10); })
+    .attr("dy", ".35em")
+    .attr("text-anchor", "middle")
+    .attr("class", "test")
+    .text(function(d) { return d.name; })
+    .style("fill-opacity", 1);
+
+  nodeEnter.append("path")
+    .attr("class", function(d){ return d.leaf? "arrow test": "arrow hide";} )
+    .attr("transform", function(d) { return "translate(" + 0 + "," + ( nodeBoxHeight/2 + 10 )  + ")"; })
+    .attr("d", d3.svg.symbol().type("triangle-up") );
+
+  // Declare the links…
+  var link = gTree.selectAll("path.link")
+    .data(links, function(d) { return d.target.id; });
+
+  // Enter the links.
+  link.enter().insert("path", "g")
+    .attr("class", "link test")
+    .attr("d", diagonal)
+    .each(function(d){
+      d.el = this;
+    });
+  
+  update = function(curRecord) {
+
+    gTree.selectAll("g")
+      .classed("curRecord", function(){ return false; } );
+
+    d3.selectAll("table tbody tr")
+      .classed("curRecord", function(d,i){ return i == curRecord; });
+
+    dive(rootNode,curRecord);
+    /*
+    // gTree.selectAll(".test").classed("curRecord", function(d){ 
+    //   return d.target ? d.target.test(curRecord) : d.test(curRecord);
+    // });
+
+    gTree.selectAll(".test")
+      .each(function(d,i){
+        // if( d.target ? d.target.test(curRecord) : d.test(curRecord) ) {
+        //   var a = {};
+        //   if($(this).hasClass("collapse")) {
+        //     // ...
+        //   }
+          var depth = d.target ? d.target.depth : d.depth;
+          var testFunc = d.target ? d.target.test : d.test;
+          var el = this;
+
+          setTimeout(function(){
+            d3.select(el).classed("curRecord", function(){ return testFunc(records[curRecord]); } );
+          },depth * 500);
+
+
+            //.attr(function())
+        //}
+      });
+*/
+  }
+
+  function dive(node,curRecord) {
+    d3.select(node.el)
+      .classed("curRecord", true);
+
+    if(node.leaf) {
+      // Class label found, exit
+      return;
+    }
+
+    for (var i = 0; i < node.links.length; i++) {
+      if( node.links[i].target.test(records[curRecord]) ) {
+        d3.select(node.links[i].el)
+          .classed("curRecord", true);
+
+        dive(node.links[i].target,curRecord);
+        return;
+
+      }
+    };
+
+  }
+
+})()
+</script>
+{% endraw %}
+
+<svg>
+  <defs>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="4 4" result="shadow"></feGaussianBlur>
+      <feOffset dx="0" dy="0"></feOffset>
+    </filter>
+  </defs>
+</svg>

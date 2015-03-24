@@ -1,0 +1,322 @@
+<style>
+  #knn-viz {
+    position: relative;
+  }
+  #knn-viz svg {
+    border: solid 1px #ccc;
+  }
+  .article-image {
+    display: none;
+  }
+  circle.data {
+    stroke-width: 2px;
+  }
+  .g_static line.axis, 
+  .lineup_bars line {
+    fill: none;
+    stroke: #000;
+    shape-rendering: crispEdges;
+  }
+  .g_static .k_line {
+    stroke: #222;
+    stroke-width: 1.5px;
+  }
+</style>
+<div>
+<p class="animation" id="knn2-viz">
+<script>
+function distance(a, b) {
+  var dx = a[0] - b[0],
+      dy = a[1] - b[1];
+  return Math.sqrt(dx * dx + dy * dy);
+}
+function angle(point, origin) {
+  var x = point[0] - origin[0],
+      y = point[1] - origin[1];
+  return Math.atan2( y, x );
+}
+function toDegrees(rad){
+  var deg = ( 360 * rad ) / ( 2 * Math.PI );
+  return deg;
+}
+function toRadians(deg) {
+  var rad = ( 2 * Math.PI ) * ( deg / 360 );
+  return rad;
+}
+
+var knn2_viz = knn_div.append("svg")
+    .attr("width", width)
+    .attr("height", height)
+    //.attr("transform",  "scale(" + ( width/500 ) + ")")
+    ;
+
+function kNN2_setup() {
+
+  var knn2_viz
+
+  var sample_diameter = width > 400 ? Math.max(400, 0.3 * width) : width;
+
+  var og = [width/2,sample_diameter/2];
+
+  var h_sd = sample_diameter/2;
+
+  var circRad = (width/500 * 5).clamp(3,7);
+  var degOffset = Math.random()*360;
+  var testPoints = [{x:0,y:0,i:0,deg:0,radius:0}].concat(
+      d3.range(3).map(function(d,i,a){
+
+        var radius = h_sd / 2 + ( Math.random() - 0.5 ) * ( h_sd / 3 );
+
+        var deg = i/a.length * 360 + degOffset + ( Math.random() - 0.5 ) * 45;
+        
+        var x = radius * Math.cos( toRadians(deg) );
+        var y = radius * Math.sin( toRadians(deg) );
+
+        return { 
+          x: x, 
+          y: y,
+          radius: radius,
+          deg: deg,
+          i: i + 1
+        };
+      })
+    );
+
+  var currentTestPoint = 0;
+  var current_k = 4;
+
+  degOffset = Math.random() * 360;
+
+  var colScale = d3.scale.category10();
+  //var typeColor = ["red","blue","green","orange"];
+
+  var typeColor = d3.range(3).map(function(d,i){
+    return colScale(d);
+  }),
+    origin = [0,0];
+  
+  var points = d3.range(25)
+    .map(function(d,i,a){
+      // Random position distributed evenly by distance
+      var inner_rad = circRad + 10;//0.05 * sample_diameter;
+      var outer_rad = sample_diameter / 2;
+
+      var radius = i / a.length * outer_rad
+                 + inner_rad // Space away from the center
+                 + (Math.random()-0.5) * 8; // Add some jitter
+      radius = radius.clamp(0,outer_rad-circRad);
+
+      var deg = Math.random() * 360;
+      
+      var x = radius * Math.cos( toRadians(deg) );
+      var y = radius * Math.sin( toRadians(deg) );
+      
+      return  {
+        x: x,
+        y: y,
+        type: Math.floor(( ( (deg+degOffset) % 360) / 360 )*typeColor.length ),
+        //radius: radius,
+        radii: testPoints.map(function(d2,i2){ return distance([d2.x,d2.y],[x,y]); }),
+        deg: deg,
+        i: []
+      };
+    });
+
+  testPoints.map(function(tpd,tpi){
+    tpd.points = points.concat().sort(function(a,b){
+      return (+a.radii[tpd.i]) - (+b.radii[tpd.i]) ;
+    });
+    tpd.points.map(function(d,i){
+      d.i[tpd.i] = i;
+    });
+  });
+
+  var tf = {
+    //scale: "scale(" + ( width/500 ) + ")",
+    scale: "",
+    translate: "translate(" + og[0] + ","+ og[1] +")"
+  }
+  var gLineup = svg.append("g")
+    //.attr("scale", width/500 )
+    .attr("class","g_lineup")
+    .attr("opacity",0.4)
+    .attr("transform", tf.scale + tf.translate);
+
+  gLineup.append("circle")
+    .attr("class","origin lineup")
+    .attr({
+      "r": circRad,
+      "cx": origin[0],
+      "cy": origin[1],
+      "r": circRad,
+      //"fill-opacity": 0,
+      "fill": "#FFF",
+      "stroke": "#000",
+      "stroke-width": 2,
+      //"opacity": 0
+    });
+
+  gLineup.selectAll("circle.data")
+      .data(testPoints[currentTestPoint].points)
+    .enter().append("circle")
+      .attr({
+        "class" : function(d,i){ return "data lineup data" + i; },
+        "cx"    : function(d){return d.x},
+        "cy"    : function(d){return d.y},
+        "r"     : circRad,
+        "fill"  : function(d){return typeColor[d.type]}
+      })
+      .style("stroke","#fff")
+      .on("mouseover", circle_mouseover)                  
+      .on("mouseout", circle_mouseout)
+      .on("click", new_k)
+      .each(function(d,i){
+        var path = pathAlongCircle(d,origin);
+        //var path2 = svg.append("path").attr("d",path);
+        var el = d3.select(dummySVGElement("path")).attr("d",path);
+        d3.select(this)
+          .transition()
+            .duration(2500)
+            .tween('translateAlongPath', translateAlongPath(el.node(), 1));
+
+      });
+
+  var gStatic = svg.append("g")
+    .attr("class","g_static")
+    .attr("transform", tf.scale + tf.translate);
+/*
+  var gVoronoi = gStatic.append("g")
+    .attr("class","voronoi").moveToBack();
+  var voroCalc = voronoi(bcsPoints);
+
+  var voroGrouped = points.map(function(pd,pi){
+    return typeColor.map(function(d,i){
+        return {
+          d:voroCalc.filter(function(vd,vi){
+              return vd.point.points.most[pi] == i;
+            }).reduce(function(p,v){
+              return p + " M" + v.join("L") + "Z";
+            },""),
+          name: d
+        };
+        
+      });
+
+  });
+  debugger;
+  
+  gVoronoi.selectAll("g")
+    //.data(voroCalc)
+    .data(voroGrouped)
+  .enter().append("g")
+    .attr("class",function(d,i){ return "voronoi" + i;})
+    .attr("visibility",function(d,i){ return i == current_k - 1 ? "visible": "hidden"; })
+    .each(function(d,i){
+      d3.select(this).selectAll("path")
+          .data(d)
+        .enter().append("path")
+          .attr("fill", F("name"))
+          .attr('fill-opacity', 0.5)
+          .attr("d", F("d"));
+    })
+
+*/
+
+  // gVoronoi.selectAll("circle")
+  //   .data(bcsPoints)
+  // .enter().append("circle")
+  //   .attr("class","voronoi")
+  //   .attr("cx", F("x"))
+  //   .attr("cy", F("y"))
+  //   .attr('r',2)
+  //   .style("fill", function(d) { debugger; return typeColor[d.points.most[current_k-1]]; })
+  //   .attr('fill-opacity', 0.5)
+  //   //.attr('stroke')
+  //   //.attr("d", function(d) { return "M" + d.join("L") + "Z"; });
+  //   ;
+
+  var gTestPoints = gStatic.append("g")
+    .attr("class","g_testpoints");
+
+  gTestPoints.selectAll("circle.testpoint")
+      .data(testPoints)
+    .enter().append("circle")
+      .attr({
+        "class": "testpoint",
+        "cx": F("x"),
+        "cy": F("y"),
+        "r": circRad,
+        "fill-opacity": 1,
+        "fill": "#FFF",
+        "stroke": "#000",
+        "stroke-width": 2,
+        "opacity": 0
+      })
+      .on("click",new_testPoint)
+      .moveToFront()
+      .transition()
+        .attr('opacity', 1);
+
+  var half_sd = sample_diameter / 2 + 5;
+
+  gStatic.append("line")
+    .attr({
+      "class": "x axis",
+      "x1": -half_sd - 10,
+      "y1": half_sd,
+      "x2": half_sd,
+      "y2": half_sd,
+    });  
+
+  gStatic.append("line")
+    .attr({
+      "class": "y axis",
+      "x1": -half_sd,
+      "y1": half_sd + 10,
+      "x2": -half_sd,
+      "y2": -half_sd + 10
+    });
+
+    gStatic.selectAll("g.g_k_lines")
+      .data(testPoints)
+    .enter().append("g")
+      .attr("class", function(d,i){ return "g_k_lines testpoint" + i; })
+      .each(function(tpd,tpi){
+
+        d3.select(this).selectAll("line.k_line.testpoint" + tpi)
+            .data(testPoints[currentTestPoint].points)
+          .enter().append("line")
+            .attr({
+              "class":"k_line testpoint" + tpi,
+              "x1": tpd.x, "y1": tpd.y,
+              "x2": function(d){ return d.x; },
+              "y2": function(d){ return d.y; },
+              "opacity": 0
+            })
+            .moveToBack()
+            .transition()
+              .attr("opacity",function(d,i){ return d.i[currentTestPoint] <= current_k && tpi == currentTestPoint ? 1: 0; });
+      });
+
+  gStatic.selectAll("circle.data")
+      .data(testPoints[currentTestPoint].points)
+    .enter().append("circle")
+      .attr({
+        "class" : function(d,i){ return "data static data" + i; },
+        "cx"    : function(d){return d.x},
+        "cy"    : function(d){return d.y},
+        "r"     : circRad,
+        "fill"  : function(d){return typeColor[d.type]}
+      })
+      .style("stroke","#fff")
+      .on("mouseover", circle_mouseover)                  
+      .on("mouseout", circle_mouseout)
+      .on("click", new_k);
+
+
+}
+
+
+</script>
+</p>
+</div>
